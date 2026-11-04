@@ -77,6 +77,17 @@ def join_path(base, child):
     return base_clean + "/" + child_clean
 
 
+def get_parent_dir(path):
+    """Return the parent directory for a given path."""
+    target = normalize_path(path)
+    if target == "/":
+        return "/"
+    parts = target.rstrip("/").split("/")
+    if len(parts) <= 2:
+        return "/"
+    return "/".join(parts[:-1])
+
+
 def list_directory(path="/"):
     """
     List contents of a directory.

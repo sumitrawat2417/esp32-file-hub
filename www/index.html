@@ -287,11 +287,20 @@
 
     <!-- Upload Zone -->
     <div class="card">
-      <div class="dropzone" id="dropzone" onclick="document.getElementById('filePicker').click()">
+      <div class="dropzone" id="dropzone" onclick="onDropzoneClick(event)">
         <svg class="dropzone-icon" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-        <div class="dropzone-text">Click or drop files to upload</div>
-        <div class="dropzone-sub">Destination: <span class="target-tag" id="targetDirTag">/</span> &bull; Supports multiple files</div>
+        <div class="dropzone-text">Click or drop files / folders to upload</div>
+        <div class="dropzone-sub">Destination: <span class="target-tag" id="targetDirTag">/</span> &bull; Supports files & nested folders</div>
+        <div style="display:flex; justify-content:center; gap:0.6rem; margin-top:0.85rem; flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); document.getElementById('filePicker').click()">
+            📄 Upload Files
+          </button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); document.getElementById('folderPicker').click()">
+            📁 Upload Folder
+          </button>
+        </div>
         <input type="file" id="filePicker" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <input type="file" id="folderPicker" webkitdirectory directory multiple style="display:none" onchange="handleFileSelect(this.files)">
       </div>
     </div>
 
@@ -337,9 +346,11 @@
         <div style="color:var(--text-muted); margin-top:3px;">On ESP32 Flash: <span id="conflictExistingSize" style="color:var(--text); font-weight:600;"></span></div>
         <div id="conflictReason" style="color:var(--warning); margin-top:6px; font-size:0.78rem; display:none;"></div>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="btnCancelConflict">Skip File</button>
-        <button class="btn btn-danger" id="btnOverwriteConflict">Replace File</button>
+      <div class="modal-actions" style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" id="btnCancelConflict">Skip</button>
+        <button class="btn btn-secondary btn-sm" id="btnSkipAllConflict" style="display:none;">Skip All</button>
+        <button class="btn btn-danger btn-sm" id="btnOverwriteConflict">Replace</button>
+        <button class="btn btn-danger btn-sm" id="btnOverwriteAllConflict" style="display:none;">Replace All</button>
       </div>
     </div>
   </div>
@@ -601,7 +612,70 @@
       return computePureJsSha256(new Uint8Array(buf));
     }
 
-    function confirmOverwrite(filename, details) {
+    function onDropzoneClick(e) {
+      if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+        document.getElementById('filePicker').click();
+      }
+    }
+
+    async function getAllDroppedFiles(dataTransfer) {
+      const items = dataTransfer.items;
+      if (!items || !items.length) {
+        return { files: Array.from(dataTransfer.files || []), emptyDirs: [] };
+      }
+
+      const files = [];
+      const emptyDirs = [];
+      const queue = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.webkitGetAsEntry) {
+          const entry = item.webkitGetAsEntry();
+          if (entry) queue.push({ entry, path: '' });
+        } else if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+
+      if (queue.length === 0 && files.length === 0) {
+        return { files: Array.from(dataTransfer.files || []), emptyDirs: [] };
+      }
+
+      while (queue.length > 0) {
+        const { entry, path } = queue.shift();
+        if (entry.isFile) {
+          const file = await new Promise(resolve => entry.file(resolve, () => resolve(null)));
+          if (file) {
+            file.customRelativePath = path ? `${path}/${file.name}` : file.name;
+            files.push(file);
+          }
+        } else if (entry.isDirectory) {
+          const dirPath = path ? `${path}/${entry.name}` : entry.name;
+          const reader = entry.createReader();
+          let dirHasChildren = false;
+          let batch;
+          do {
+            batch = await new Promise(resolve => reader.readEntries(resolve, () => resolve([])));
+            if (batch && batch.length > 0) {
+              dirHasChildren = true;
+              for (const child of batch) {
+                queue.push({ entry: child, path: dirPath });
+              }
+            }
+          } while (batch && batch.length > 0);
+
+          if (!dirHasChildren) {
+            emptyDirs.push(dirPath);
+          }
+        }
+      }
+
+      return { files, emptyDirs };
+    }
+
+    function confirmOverwrite(filename, details, isBatch = false) {
       return new Promise(resolve => {
         document.getElementById('conflictFilename').innerText = filename;
         document.getElementById('conflictIncomingSize').innerText = details.incoming;
@@ -613,51 +687,124 @@
         } else {
           reasonEl.style.display = 'none';
         }
+
+        const skipAllBtn = document.getElementById('btnSkipAllConflict');
+        const replaceAllBtn = document.getElementById('btnOverwriteAllConflict');
+        if (skipAllBtn) skipAllBtn.style.display = isBatch ? 'inline-block' : 'none';
+        if (replaceAllBtn) replaceAllBtn.style.display = isBatch ? 'inline-block' : 'none';
+
         const modal = document.getElementById('conflictModal');
         modal.style.display = 'flex';
 
         document.getElementById('btnOverwriteConflict').onclick = () => {
           modal.style.display = 'none';
-          resolve(true);
+          resolve('replace');
         };
+        if (replaceAllBtn) {
+          replaceAllBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve('replace-all');
+          };
+        }
         document.getElementById('btnCancelConflict').onclick = () => {
           modal.style.display = 'none';
-          resolve(false);
+          resolve('skip');
         };
+        if (skipAllBtn) {
+          skipAllBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve('skip-all');
+          };
+        }
       });
     }
 
-    async function handleFileSelect(files) {
-      if (!files || !files.length) return;
+    async function handleFileSelect(input) {
+      let files = [];
+      let emptyDirs = [];
+
+      if (!input) return;
+      if (input.files && Array.isArray(input.files)) {
+        files = input.files;
+        emptyDirs = input.emptyDirs || [];
+      } else if (input instanceof FileList || Array.isArray(input)) {
+        files = Array.from(input);
+      } else if (input.length !== undefined) {
+        files = Array.from(input);
+      }
+
+      if (files.length === 0 && emptyDirs.length === 0) return;
+
+      // Create any empty folders detected in a dropped folder tree
+      for (const dirPath of emptyDirs) {
+        const dirTarget = (currentDir === '/' ? '/' : currentDir + '/') + dirPath;
+        try {
+          await fetch(`/api/mkdir?path=${encodeURIComponent(dirTarget)}`, { method: 'POST' });
+        } catch (_) {}
+      }
+
+      if (files.length === 0) {
+        if (emptyDirs.length > 0) {
+          showToast(`Created ${emptyDirs.length} folder(s)`, 'success');
+          await loadDirectoryFiles();
+        }
+        return;
+      }
+
+      let batchDecision = null; // 'replace-all' | 'skip-all' | null
+      let uploadedCount = 0;
+      let skippedCount = 0;
+      const isBatch = files.length > 1;
+
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        const dest = (currentDir === '/' ? '/' : currentDir + '/') + f.name;
-        const existing = currentEntries.find(e => !e.is_dir && e.name === f.name);
+        const relPath = f.webkitRelativePath || f.customRelativePath || f.name;
+        const dest = (currentDir === '/' ? '/' : currentDir + '/') + relPath;
 
-        if (existing) {
-          // Check 1: Size comparison on client (0% ESP32 CPU/flash overhead)
-          if (f.size !== existing.size) {
-            const proceed = await confirmOverwrite(f.name, {
-              reason: 'File exists with a different size.',
-              incoming: `${formatBytes(f.size)} (${f.size} bytes)`,
-              existing: `${formatBytes(existing.size)} (${existing.size} bytes)`
-            });
-            if (!proceed) {
-              showToast(`Skipped '${f.name}'`, 'info');
-              continue;
+        let fileExists = false;
+        let existingSize = null;
+        let esp32Hash = null;
+        let clientHash = null;
+
+        // Check 1: In current directory? Use in-memory list (0% ESP32 load)
+        if (relPath === f.name) {
+          const existing = currentEntries.find(e => !e.is_dir && e.name === f.name);
+          if (existing) {
+            fileExists = true;
+            existingSize = existing.size;
+          }
+        } else {
+          // Nested file: query ESP32 hash endpoint to check existence
+          try {
+            const checkRes = await fetch(`/api/hash?path=${encodeURIComponent(dest)}`);
+            if (checkRes.ok) {
+              const data = await checkRes.json();
+              fileExists = true;
+              esp32Hash = data.sha256;
             }
+          } catch (_) {}
+        }
+
+        if (fileExists) {
+          if (batchDecision === 'skip-all') {
+            skippedCount++;
+            continue;
+          }
+
+          let isIdentical = false;
+
+          // If size differs, files can't be identical (0% ESP32 CPU load)
+          if (existingSize !== null && f.size !== existingSize) {
+            isIdentical = false;
           } else {
-            // Check 2: Sizes match. Compute client hash first (client device handles workload)
-            showToast(`Comparing '${f.name}' checksum...`, 'info');
-            let clientHash = null;
+            // Sizes match or nested file: compute client hash first
             try {
               clientHash = await calculateFileSha256(f);
             } catch (err) {
               console.warn('Client hash error:', err);
             }
 
-            let esp32Hash = null;
-            if (clientHash) {
+            if (clientHash && !esp32Hash) {
               try {
                 const res = await fetch(`/api/hash?path=${encodeURIComponent(dest)}`);
                 if (res.ok) {
@@ -668,43 +815,78 @@
             }
 
             if (clientHash && esp32Hash && clientHash.toLowerCase() === esp32Hash.toLowerCase()) {
-              // 100% byte-for-byte identical! Skip upload entirely to save flash wear & Wi-Fi!
-              showToast(`ℹ️ '${f.name}' is already identical on ESP32 (skipped)`, 'info');
+              isIdentical = true;
+            }
+          }
+
+          if (isIdentical) {
+            showToast(`ℹ️ '${relPath}' is already identical (skipped)`, 'info');
+            skippedCount++;
+            continue;
+          }
+
+          if (batchDecision === 'replace-all') {
+            // Auto-overwrite without prompt
+          } else {
+            const choice = await confirmOverwrite(relPath, {
+              reason: (existingSize !== null && f.size !== existingSize)
+                ? 'File exists with a different size.'
+                : 'File exists with modified contents.',
+              incoming: `${formatBytes(f.size)}${clientHash ? ' (SHA: ' + clientHash.substring(0, 8) + '...)' : ''}`,
+              existing: `${existingSize !== null ? formatBytes(existingSize) : 'Existing'}${esp32Hash ? ' (SHA: ' + esp32Hash.substring(0, 8) + '...)' : ''}`
+            }, isBatch);
+
+            if (choice === 'skip') {
+              skippedCount++;
               continue;
-            } else {
-              const proceed = await confirmOverwrite(f.name, {
-                reason: 'Same size, but contents are modified.',
-                incoming: `${formatBytes(f.size)}${clientHash ? ' (SHA: ' + clientHash.substring(0, 8) + '...)' : ''}`,
-                existing: `${formatBytes(existing.size)}${esp32Hash ? ' (SHA: ' + esp32Hash.substring(0, 8) + '...)' : ''}`
-              });
-              if (!proceed) {
-                showToast(`Skipped '${f.name}'`, 'info');
-                continue;
-              }
+            } else if (choice === 'skip-all') {
+              batchDecision = 'skip-all';
+              skippedCount++;
+              continue;
+            } else if (choice === 'replace-all') {
+              batchDecision = 'replace-all';
             }
           }
         }
 
-        showToast(`Uploading ${f.name} (${formatBytes(f.size)})...`, 'info');
+        const progressMsg = isBatch
+          ? `Uploading (${i + 1}/${files.length}): ${relPath} (${formatBytes(f.size)})...`
+          : `Uploading ${relPath} (${formatBytes(f.size)})...`;
+        showToast(progressMsg, 'info');
+
         try {
           const res = await fetch(`/api/upload?path=${encodeURIComponent(dest)}&overwrite=true`, {
             method: 'POST',
             body: f
           });
           if (res.ok) {
-            showToast(`Uploaded ${f.name}`, 'success');
+            uploadedCount++;
           } else {
             const err = await res.json();
-            showToast(`Upload failed for ${f.name}: ${err.error || ''}`, 'error');
+            showToast(`Upload failed for ${relPath}: ${err.error || ''}`, 'error');
             break;
           }
         } catch (e) {
-          showToast(`Network error uploading ${f.name}`, 'error');
+          showToast(`Network error uploading ${relPath}`, 'error');
           break;
         }
       }
-      const fileInput = document.getElementById('fileInput');
+
+      const fileInput = document.getElementById('filePicker');
       if (fileInput) fileInput.value = '';
+      const folderInput = document.getElementById('folderPicker');
+      if (folderInput) folderInput.value = '';
+
+      if (isBatch) {
+        if (skippedCount > 0) {
+          showToast(`Finished: ${uploadedCount} uploaded, ${skippedCount} skipped`, 'info');
+        } else {
+          showToast(`Finished: ${uploadedCount} file(s) uploaded successfully`, 'success');
+        }
+      } else if (uploadedCount === 1) {
+        showToast(`Uploaded ${files[0].name}`, 'success');
+      }
+
       await loadDirectoryFiles();
       await loadStorageMetrics();
     }
@@ -719,10 +901,11 @@
     const dz = document.getElementById('dropzone');
     dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
     dz.ondragleave = () => dz.classList.remove('dragover');
-    dz.ondrop = e => {
+    dz.ondrop = async e => {
       e.preventDefault();
       dz.classList.remove('dragover');
-      handleFileSelect(e.dataTransfer.files);
+      const dropped = await getAllDroppedFiles(e.dataTransfer);
+      handleFileSelect(dropped);
     };
 
     window.onload = function() {

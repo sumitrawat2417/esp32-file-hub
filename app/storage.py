@@ -145,22 +145,33 @@ class StorageManager:
         return True
 
     @staticmethod
+    def _rm_recursive(target):
+        """Recursively delete a directory and all nested contents."""
+        try:
+            stat = os.stat(target)
+            if (stat[0] & 0x4000) != 0:
+                for item in os.listdir(target):
+                    sub = target + "/" + item
+                    StorageManager._rm_recursive(sub)
+                os.rmdir(target)
+            else:
+                os.remove(target)
+            return True
+        except Exception as e:
+            print("[Storage] Failed to delete '{}': {}".format(target, e))
+            return False
+
+    @staticmethod
     def delete(path):
-        """Safely delete a file or empty directory."""
+        """Safely delete a file or directory tree."""
         target = StorageManager.normalize_path(path)
         if target == "/":
             return False
 
         try:
-            stat = os.stat(target)
-            if (stat[0] & 0x4000) != 0:
-                os.rmdir(target)
-            else:
-                os.remove(target)
-            return True
-        except OSError as e:
-            print("[Storage] Failed to delete '{}': {}".format(target, e))
-            return False
+            return StorageManager._rm_recursive(target)
+        finally:
+            gc.collect()
 
     @staticmethod
     def exists(path):

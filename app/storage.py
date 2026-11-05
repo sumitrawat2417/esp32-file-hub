@@ -173,6 +173,35 @@ class StorageManager:
             return False
 
     @staticmethod
+    def compute_sha256(path):
+        """Compute SHA-256 checksum in 1 KB streaming chunks to save ESP32 memory."""
+        target = StorageManager.normalize_path(path)
+        try:
+            try:
+                import uhashlib as hashlib
+            except ImportError:
+                import hashlib
+            try:
+                import ubinascii as binascii
+            except ImportError:
+                import binascii
+
+            h = hashlib.sha256()
+            with open(target, "rb") as f:
+                while True:
+                    chunk = f.read(1024)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+            digest = binascii.hexlify(h.digest()).decode("utf-8")
+            return digest
+        except Exception as e:
+            print("[Storage] Hash error on '{}': {}".format(target, e))
+            return None
+        finally:
+            gc.collect()
+
+    @staticmethod
     def write_stream(target_path, content_length, sock, initial_chunk=b"", chunk_size=1024):
         """
         Stream incoming bytes directly into a temporary file and atomically commit upon verification.

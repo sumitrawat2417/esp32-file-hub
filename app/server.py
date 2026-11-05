@@ -125,6 +125,8 @@ class WebServer:
             self._handle_create_directory(client, query_params)
         elif method == "GET" and path == "/api/download":
             self._handle_download(client, query_params)
+        elif method == "GET" and path == "/api/hash":
+            self._handle_get_hash(client, query_params)
         elif method == "POST" and path == "/api/upload":
             self._handle_upload(client, query_params, headers, initial_body)
         elif method == "DELETE" and path == "/api/files":
@@ -240,6 +242,24 @@ class WebServer:
             print("[Server] Download streamed: '{}' ({} bytes)".format(target, file_size))
         except Exception as e:
             print("[Server] Error streaming download: {}".format(e))
+        finally:
+            gc.collect()
+
+    def _handle_get_hash(self, client, query_params):
+        """API handler: GET /api/hash?path=/... (Returns SHA-256 for integrity check)."""
+        raw_path = query_params.get("path", "")
+        if not raw_path or raw_path == "/":
+            self._send_error(client, 400, "Path parameter required")
+            return
+
+        target = StorageManager.normalize_path(raw_path)
+        try:
+            digest = StorageManager.compute_sha256(target)
+            if digest is None:
+                self._send_error(client, 404, "File not found")
+                return
+
+            self._send_json(client, {"path": target, "sha256": digest})
         finally:
             gc.collect()
 

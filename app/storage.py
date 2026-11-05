@@ -163,6 +163,16 @@ class StorageManager:
             return False
 
     @staticmethod
+    def exists(path):
+        """Check whether a path exists in the filesystem."""
+        target = StorageManager.normalize_path(path)
+        try:
+            os.stat(target)
+            return True
+        except OSError:
+            return False
+
+    @staticmethod
     def write_stream(target_path, content_length, sock, initial_chunk=b"", chunk_size=1024):
         """
         Stream incoming bytes directly into a temporary file and atomically commit upon verification.

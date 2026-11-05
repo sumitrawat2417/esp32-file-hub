@@ -218,6 +218,38 @@
     .toast-error { border-color: var(--danger); }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
+    /* Confirmation Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(11, 19, 41, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 1rem;
+    }
+    .modal {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      text-align: center;
+      animation: modalScale 0.2s ease;
+    }
+    @keyframes modalScale {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-icon { font-size: 2.2rem; margin-bottom: 0.75rem; }
+    .modal-title { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-bottom: 0.5rem; }
+    .modal-desc { font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem; }
+    .modal-actions { display: flex; justify-content: center; gap: 0.75rem; }
+
     @media (max-width: 600px) {
       .storage-grid { grid-template-columns: 1fr; }
       header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
@@ -292,10 +324,26 @@
     </div>
   </div>
 
+  <!-- Overwrite Confirmation Modal -->
+  <div class="modal-backdrop" id="conflictModal">
+    <div class="modal">
+      <div class="modal-icon">⚠️</div>
+      <div class="modal-title">File Already Exists</div>
+      <div class="modal-desc">
+        A file named <strong id="conflictFilename" style="color:var(--primary);"></strong> already exists on the board. Replace it?
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnCancelConflict">Cancel</button>
+        <button class="btn btn-danger" id="btnOverwriteConflict">Overwrite</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
     let currentDir = '/';
+    let currentEntries = [];
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toastContainer');
@@ -389,6 +437,7 @@
         }
 
         const entries = data.entries || [];
+        currentEntries = entries;
         let rows = '';
 
         if (currentDir !== '/') {
@@ -477,14 +526,41 @@
       }
     }
 
+    function confirmOverwrite(filename) {
+      return new Promise(resolve => {
+        document.getElementById('conflictFilename').innerText = filename;
+        const modal = document.getElementById('conflictModal');
+        modal.style.display = 'flex';
+
+        document.getElementById('btnOverwriteConflict').onclick = () => {
+          modal.style.display = 'none';
+          resolve(true);
+        };
+        document.getElementById('btnCancelConflict').onclick = () => {
+          modal.style.display = 'none';
+          resolve(false);
+        };
+      });
+    }
+
     async function handleFileSelect(files) {
       if (!files || !files.length) return;
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const dest = (currentDir === '/' ? '/' : currentDir + '/') + f.name;
+        const exists = currentEntries.some(e => !e.is_dir && e.name === f.name);
+
+        if (exists) {
+          const proceed = await confirmOverwrite(f.name);
+          if (!proceed) {
+            showToast(`Skipped '${f.name}'`, 'info');
+            continue;
+          }
+        }
+
         showToast(`Uploading ${f.name} (${formatBytes(f.size)})...`, 'info');
         try {
-          const res = await fetch(`/api/upload?path=${encodeURIComponent(dest)}`, {
+          const res = await fetch(`/api/upload?path=${encodeURIComponent(dest)}&overwrite=true`, {
             method: 'POST',
             body: f
           });
@@ -500,6 +576,8 @@
           break;
         }
       }
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) fileInput.value = '';
       await loadDirectoryFiles();
       await loadStorageMetrics();
     }

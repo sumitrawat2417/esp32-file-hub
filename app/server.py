@@ -251,6 +251,12 @@ class WebServer:
             return
 
         target = StorageManager.normalize_path(raw_path)
+        allow_overwrite = query_params.get("overwrite", "false").lower() == "true"
+
+        if not allow_overwrite and StorageManager.exists(target):
+            self._send_error(client, 409, "File '{}' already exists".format(target))
+            return
+
         content_length = int(headers.get("content-length", 0))
 
         if content_length <= 0:

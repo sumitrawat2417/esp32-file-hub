@@ -17,13 +17,15 @@ from app.dns import DNSServer
 class WebServer:
     """Production-grade embedded HTTP server with streaming I/O and REST API."""
 
-    def __init__(self, config, ip_address="0.0.0.0", hostname="esp32"):
+    def __init__(self, config, ip_address="0.0.0.0", hostname="esp32", wifi_status=None):
         srv_cfg = config.get("server", {})
         self.port = srv_cfg.get("port", 80)
         self.chunk_size = srv_cfg.get("chunk_size", 1024)
         self.static_dir = srv_cfg.get("static_dir", "www")
         self.ip_address = ip_address
         self.hostname = hostname
+        self.config = config
+        self.wifi_status = wifi_status or {}
         self.running = False
 
     def start(self):
@@ -132,6 +134,10 @@ class WebServer:
             self._handle_download(client, query_params)
         elif method == "GET" and path == "/api/hash":
             self._handle_get_hash(client, query_params)
+        elif method == "GET" and path == "/api/wifi":
+            self._handle_get_wifi(client)
+        elif method == "POST" and path == "/api/wifi":
+            self._handle_set_wifi(client, headers, initial_body)
         elif method == "POST" and path == "/api/upload":
             self._handle_upload(client, query_params, headers, initial_body)
         elif method == "DELETE" and path == "/api/files":
@@ -278,6 +284,64 @@ class WebServer:
             self._send_error(client, 404, "File not found")
         finally:
             gc.collect()
+
+    def _handle_get_wifi(self, client):
+        """API handler: GET /api/wifi (Returns current Wi-Fi status and configured STA SSID)."""
+        sta_ssid = self.config.get("wifi", {}).get("sta_ssid", "")
+        ap_ssid = self.config.get("wifi", {}).get("ap_ssid", "ESP32-FileTransfer")
+        self._send_json(client, {
+            "mode": self.wifi_status.get("mode", "AP"),
+            "ip": self.ip_address,
+            "hostname": self.hostname,
+            "connected_ssid": self.wifi_status.get("ssid", ap_ssid),
+            "sta_ssid": sta_ssid,
+            "ap_ssid": ap_ssid,
+            "mdns_url": "http://{}.local/".format(self.hostname)
+        })
+
+    def _handle_set_wifi(self, client, headers, initial_body):
+        """API handler: POST /api/wifi (Update Wi-Fi credentials and persist to config.json)."""
+        content_length = int(headers.get("content-length", 0))
+        body = initial_body
+        while len(body) < content_length:
+            chunk = client.recv(content_length - len(body))
+            if not chunk:
+                break
+            body += chunk
+
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            self._send_error(client, 400, "Invalid JSON payload")
+            return
+
+        from app.config import ConfigManager
+        config = ConfigManager.load()
+        if "wifi" not in config:
+            config["wifi"] = {}
+
+        if "sta_ssid" in payload:
+            config["wifi"]["sta_ssid"] = payload["sta_ssid"].strip()
+        if "sta_password" in payload:
+            config["wifi"]["sta_password"] = payload["sta_password"]
+        if "hostname" in payload and payload["hostname"].strip():
+            config["wifi"]["hostname"] = payload["hostname"].strip()
+
+        if ConfigManager.save(config):
+            self.config = config
+            target_ssid = config["wifi"]["sta_ssid"] or config["wifi"].get("ap_ssid", "ESP32-FileTransfer")
+            self._send_json(client, {
+                "success": True,
+                "message": "Wi-Fi settings saved. Rebooting to connect to '{}'...".format(target_ssid)
+            })
+            time.sleep(1.0)
+            try:
+                import machine
+                machine.reset()
+            except Exception:
+                pass
+        else:
+            self._send_error(client, 500, "Failed to save configuration")
 
     def _handle_upload(self, client, query_params, headers, initial_body):
         """API handler: POST /api/upload?path=/..."""

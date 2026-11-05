@@ -365,7 +365,10 @@
         <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
         <span class="brand-title">ESP32 File Transfer</span>
       </div>
-      <div class="badge-ip" id="badgeIp">192.168.4.1</div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button class="btn btn-sm btn-secondary" onclick="openWifiModal()" title="Wi-Fi & Hotspot Settings">📶 Wi-Fi</button>
+        <div class="badge-ip" id="badgeIp">192.168.4.1</div>
+      </div>
     </header>
 
     <!-- Storage Capacity -->
@@ -478,6 +481,63 @@
       <div class="viewer-footer">
         <span id="viewerPathFooter" style="font-family:monospace;">/</span>
         <button class="btn btn-sm btn-secondary" onclick="closeViewer()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wi-Fi & Hotspot Settings Modal -->
+  <div class="modal-backdrop" id="wifiModal">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex; align-items:center; gap:0.5rem;">
+          <span>📶</span> Wi-Fi & Hotspot Settings
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="closeWifiModal()" style="padding:0.2rem 0.5rem;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem;">
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--card-border); margin-bottom: 1rem; font-size: 0.85rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom: 0.35rem;">
+            <span style="color: var(--text-muted);">Current Mode:</span>
+            <span id="wifiCurrentMode" style="font-weight: 600; color: var(--primary);">Loading...</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom: 0.35rem;">
+            <span style="color: var(--text-muted);">Network:</span>
+            <span id="wifiCurrentSsid" style="font-family: monospace;">-</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color: var(--text-muted);">ESP32 IP:</span>
+            <span id="wifiCurrentIp" style="font-family: monospace;">-</span>
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4;">
+          Connect the ESP32 directly to your PC's <strong>Mobile Hotspot</strong> or home Wi-Fi (2.4 GHz). You won't need to disconnect your PC to test!
+        </p>
+
+        <div style="margin-bottom: 0.85rem;">
+          <label style="display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.35rem;">Hotspot / Wi-Fi SSID</label>
+          <input type="text" id="wifiSsidInput" placeholder="e.g. MyPC-Hotspot or Home-WiFi" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 0.55rem 0.75rem; border-radius: 6px; font-size: 0.9rem;" />
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.35rem;">Password</label>
+          <div style="position: relative;">
+            <input type="password" id="wifiPassInput" placeholder="Leave empty if open network" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 0.55rem 2.2rem 0.55rem 0.75rem; border-radius: 6px; font-size: 0.9rem;" />
+            <span onclick="toggleWifiPassVisibility()" style="position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; opacity: 0.6;" id="wifiPassEye">👁️</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 0.65rem 0.75rem; font-size: 0.78rem; color: #93c5fd; margin-bottom: 1.25rem;">
+          💡 <strong>Safe Failover:</strong> If the hotspot is unreachable or turned off, the ESP32 automatically falls back to <code>ESP32-FileTransfer</code> AP mode in 15 seconds.
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn btn-sm btn-secondary" onclick="resetToApMode()" style="color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Clear saved Wi-Fi credentials and return to standalone AP host mode">Reset to AP Host</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="closeWifiModal()">Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnSaveWifi" onclick="saveWifiConfig()">Save & Connect</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1200,6 +1260,94 @@
       const dropped = await getAllDroppedFiles(e.dataTransfer);
       handleFileSelect(dropped);
     };
+
+    async function openWifiModal() {
+      const modal = document.getElementById('wifiModal');
+      modal.style.display = 'flex';
+      try {
+        const res = await fetch('/api/wifi');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('wifiCurrentMode').innerText = data.mode === 'STA' ? '🟢 Station (Client)' : '📡 Access Point (Hotspot)';
+          document.getElementById('wifiCurrentSsid').innerText = data.connected_ssid || '-';
+          document.getElementById('wifiCurrentIp').innerText = data.ip || '-';
+          if (data.sta_ssid && !document.getElementById('wifiSsidInput').value) {
+            document.getElementById('wifiSsidInput').value = data.sta_ssid;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load Wi-Fi status:', e);
+      }
+    }
+
+    function closeWifiModal() {
+      document.getElementById('wifiModal').style.display = 'none';
+    }
+
+    function toggleWifiPassVisibility() {
+      const input = document.getElementById('wifiPassInput');
+      const eye = document.getElementById('wifiPassEye');
+      if (input.type === 'password') {
+        input.type = 'text';
+        eye.innerText = '🙈';
+      } else {
+        input.type = 'password';
+        eye.innerText = '👁️';
+      }
+    }
+
+    async function saveWifiConfig() {
+      const ssid = document.getElementById('wifiSsidInput').value.trim();
+      const password = document.getElementById('wifiPassInput').value;
+      const btn = document.getElementById('btnSaveWifi');
+
+      if (!ssid) {
+        showToast('Please enter an SSID / Hotspot name', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'Saving...';
+
+      try {
+        const res = await fetch('/api/wifi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sta_ssid: ssid, sta_password: password })
+        });
+
+        if (res.ok) {
+          showToast(`Saved! Connecting to '${ssid}'... ESP32 is rebooting.`, 'success');
+          closeWifiModal();
+          showToast(`Open http://esp32.local/ once reconnected!`, 'info');
+        } else {
+          const err = await res.json();
+          showToast(`Failed: ${err.error || 'Unknown error'}`, 'error');
+          btn.disabled = false;
+          btn.innerText = 'Save & Connect';
+        }
+      } catch (e) {
+        // Reboot may cut connection before response completes
+        showToast(`Saved! ESP32 is rebooting to connect to '${ssid}'. Open http://esp32.local/ in ~10s.`, 'success');
+        closeWifiModal();
+      }
+    }
+
+    async function resetToApMode() {
+      if (!confirm('Switch back to standalone ESP32 Access Point mode? (SSID: ESP32-FileTransfer, IP: 192.168.4.1)')) return;
+      try {
+        await fetch('/api/wifi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sta_ssid: '', sta_password: '' })
+        });
+        showToast('Switching to AP host mode... Reconnecting to ESP32-FileTransfer.', 'info');
+        closeWifiModal();
+      } catch (e) {
+        showToast('ESP32 rebooting to AP host mode (192.168.4.1)', 'info');
+        closeWifiModal();
+      }
+    }
 
     window.onload = function() {
       const host = window.location.hostname || '192.168.4.1';

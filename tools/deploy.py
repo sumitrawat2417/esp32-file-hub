@@ -8,6 +8,7 @@ Supports standalone executable builds (PyInstaller) and direct script execution.
 import os
 import sys
 import time
+import json
 
 try:
     import serial
@@ -204,14 +205,20 @@ def deploy():
 
     base_dir = get_base_dir()
 
-    # Prefer local config.json if user customized it; otherwise fallback to config.example.json
-    local_config = os.path.join(base_dir, "config.json")
-    config_source = "config.json" if os.path.exists(local_config) else "config.example.json"
+    # Prefer config.local.json (ignored by git) or config.json; fallback to config.example.json
+    if os.path.exists(os.path.join(base_dir, "config.local.json")):
+        config_source = "config.local.json"
+    elif os.path.exists(os.path.join(base_dir, "config.json")):
+        config_source = "config.json"
+    else:
+        config_source = "config.example.json"
 
     # Files to sync: (relative path from base_dir, target path on ESP32)
     files_to_sync = [
         ("boot.py", "boot.py"),
+        ("esp32_transfer.py", "esp32_transfer.py"),
         ("main.py", "main.py"),
+        ("setup_wifi.py", "setup_wifi.py"),
         (config_source, "config.json"),
         (os.path.join("www", "index.html"), "www/index.html"),
         (os.path.join("app", "__init__.py"), "app/__init__.py"),
@@ -269,8 +276,10 @@ def deploy():
     print("Rebooting ESP32...")
     uploader.reboot()
     print("\nYour ESP32 is ready!")
-    print("1. Connect to Wi-Fi: 'ESP32-FileTransfer'")
-    print("2. Open your browser: http://esp32.local/ or http://192.168.4.1/")
+    print("1. Open your browser: http://esp32.local/ (or http://192.168.4.1/)")
+    print("2. If using Hotspot : Keep your PC on your hotspot/home Wi-Fi.")
+    print("   If using AP Host : Connect PC Wi-Fi to 'ESP32-FileTransfer'.")
+    print("3. To change Wi-Fi  : Click '📶 Wi-Fi' in the web interface or run 'setup_wifi.py'!")
     print("=" * 56)
     input("\nPress Enter to exit...")
 

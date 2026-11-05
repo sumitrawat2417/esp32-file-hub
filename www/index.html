@@ -30,7 +30,7 @@
       min-height: 100vh;
     }
 
-    .container { max-width: 800px; margin: 0 auto; }
+    .container { max-width: 900px; margin: 0 auto; }
 
     /*  Header  */
     header {
@@ -171,28 +171,191 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th {
       text-align: left;
-      padding: 0.75rem 0.6rem;
+      padding: 0.75rem 0.75rem;
       color: var(--text-muted);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
+      font-weight: 600;
       border-bottom: 1px solid var(--card-border);
     }
     td {
-      padding: 0.7rem 0.6rem;
-      border-bottom: 1px solid rgba(30, 58, 95, 0.4);
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid rgba(30, 58, 95, 0.35);
       vertical-align: middle;
+      transition: background 0.15s ease;
     }
     tr:hover td { background: var(--row-hover); }
-    .col-name { display: flex; align-items: center; gap: 0.6rem; font-weight: 500; }
-    .col-icon { font-size: 1.15rem; line-height: 1; }
+    .col-name { display: flex; align-items: center; gap: 0.65rem; font-weight: 500; }
+    .col-icon { font-size: 1.25rem; line-height: 1; flex-shrink: 0; }
     .folder-link {
       color: var(--primary);
       cursor: pointer;
       text-decoration: none;
+      font-weight: 600;
     }
     .folder-link:hover { text-decoration: underline; }
-    .actions-cell { display: flex; gap: 0.4rem; justify-content: flex-end; }
+
+    /* Size Column & Proportional Bars */
+    .size-cell-box {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 120px;
+      max-width: 160px;
+    }
+    .size-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .size-val {
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+    .size-pct {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--primary);
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 1px 5px;
+      border-radius: 4px;
+      line-height: 1.2;
+    }
+    .size-pct.dir-pct {
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .size-bar-bg {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    .size-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #2563eb);
+      border-radius: 9999px;
+      transition: width 0.35s ease;
+    }
+    .size-bar-fill.dir-fill {
+      background: linear-gradient(90deg, #f59e0b, #eab308);
+    }
+
+    /* Modern Action Buttons */
+    .actions-cell {
+      display: flex;
+      gap: 0.35rem;
+      justify-content: flex-end;
+      align-items: center;
+    }
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      padding: 0;
+    }
+    .action-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+    .action-btn:hover {
+      transform: translateY(-1px);
+    }
+    .action-view:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: var(--primary);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+    .action-download:hover {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.45);
+      color: var(--success);
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+    }
+    .action-delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+    }
+
+    /* Live Search Box & Toolbar */
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(11, 19, 41, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 0.25rem 0.6rem;
+      transition: border-color 0.2s ease;
+    }
+    .search-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.82rem;
+      outline: none;
+      width: 125px;
+      transition: width 0.2s ease;
+    }
+    .search-box input:focus {
+      width: 165px;
+    }
+    .clear-search-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0;
+      line-height: 1;
+    }
+    .clear-search-btn:hover {
+      color: var(--text);
+    }
+
+    /* Table Meta Summary Bar */
+    .table-meta-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.45rem 0.75rem;
+      margin-bottom: 0.6rem;
+      background: rgba(11, 19, 41, 0.45);
+      border: 1px solid rgba(30, 58, 95, 0.3);
+      border-radius: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
 
     /* Toast Notification */
     .toast-container {
@@ -413,14 +576,26 @@
     <div class="card">
       <div class="toolbar">
         <div class="breadcrumbs" id="crumbs"></div>
-        <div class="btn-group">
-          <button class="btn btn-secondary btn-sm" onclick="promptCreateFolder()">
-            <span>📁 New Folder</span>
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="refreshCurrentDir()">
-            <span>🔄 Refresh</span>
-          </button>
+        <div class="toolbar-right">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="fill: var(--text-muted); flex-shrink: 0;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="filterInput" placeholder="Filter files..." oninput="onFilterInput(this.value)" autocomplete="off">
+            <button type="button" class="clear-search-btn" id="clearFilterBtn" onclick="clearFilter()" style="display:none;" title="Clear filter">✕</button>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="promptCreateFolder()" title="Create new directory">
+              <span>📁 New Folder</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="refreshCurrentDir()" title="Refresh file list">
+              <span>🔄 Refresh</span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div class="table-meta-bar" id="tableMetaBar">
+        <span id="dirItemCount">Loading items...</span>
+        <span id="dirTotalSize"></span>
       </div>
 
       <div class="table-wrap">
@@ -428,8 +603,8 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th style="width: 110px;">Size</th>
-              <th style="width: 140px; text-align: right;">Actions</th>
+              <th style="width: 140px;">Size &amp; Share</th>
+              <th style="width: 110px; text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody id="fileTableBody"></tbody>
@@ -587,6 +762,11 @@
       return '📦';
     }
 
+    function escapeJs(str) {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
     async function loadStorageMetrics() {
       try {
         const res = await fetch('/api/storage');
@@ -621,8 +801,40 @@
       document.getElementById('targetDirTag').innerText = currentDir;
     }
 
+    let currentFilterQuery = '';
+
+    function onFilterInput(val) {
+      currentFilterQuery = (val || '').trim().toLowerCase();
+      const clearBtn = document.getElementById('clearFilterBtn');
+      if (clearBtn) clearBtn.style.display = currentFilterQuery ? 'inline' : 'none';
+      applyTableFilter();
+    }
+
+    function clearFilter() {
+      const input = document.getElementById('filterInput');
+      if (input) input.value = '';
+      currentFilterQuery = '';
+      const clearBtn = document.getElementById('clearFilterBtn');
+      if (clearBtn) clearBtn.style.display = 'none';
+      applyTableFilter();
+    }
+
+    function applyTableFilter() {
+      if (!currentFilterQuery) {
+        renderTable(currentEntries, false);
+        return;
+      }
+      const filtered = currentEntries.filter(item => (item.name || '').toLowerCase().includes(currentFilterQuery));
+      renderTable(filtered, true);
+    }
+
     async function navigateTo(path) {
       currentDir = path || '/';
+      currentFilterQuery = '';
+      const filterInput = document.getElementById('filterInput');
+      if (filterInput) filterInput.value = '';
+      const clearBtn = document.getElementById('clearFilterBtn');
+      if (clearBtn) clearBtn.style.display = 'none';
       renderBreadcrumbs();
       await loadDirectoryFiles();
     }
@@ -632,6 +844,120 @@
       const parts = currentDir.split('/').filter(p => p.length > 0);
       parts.pop();
       navigateTo(parts.length ? '/' + parts.join('/') : '/');
+    }
+
+    function renderTable(entries, isFiltered = false) {
+      const tbody = document.getElementById('fileTableBody');
+      const metaCountEl = document.getElementById('dirItemCount');
+      const metaSizeEl = document.getElementById('dirTotalSize');
+
+      // Calculate total directory bytes across all currentEntries
+      const totalFolderBytes = currentEntries.reduce((acc, it) => acc + (Number(it.size) || 0), 0);
+      const totalDirs = currentEntries.filter(i => i.is_dir).length;
+      const totalFiles = currentEntries.length - totalDirs;
+
+      if (metaCountEl) {
+        const countSummary = `${totalDirs} folder${totalDirs === 1 ? '' : 's'}, ${totalFiles} file${totalFiles === 1 ? '' : 's'}`;
+        if (isFiltered) {
+          metaCountEl.textContent = `Showing ${entries.length} of ${currentEntries.length} items (${countSummary})`;
+        } else {
+          metaCountEl.textContent = countSummary;
+        }
+      }
+      if (metaSizeEl) {
+        metaSizeEl.textContent = `Folder Total: ${formatBytes(totalFolderBytes)}`;
+      }
+
+      let rows = '';
+
+      if (currentDir !== '/') {
+        rows += `
+          <tr>
+            <td class="col-name">
+              <span class="col-icon">📁</span>
+              <a class="folder-link" onclick="navigateUp()">.. [Parent Directory]</a>
+            </td>
+            <td style="color:var(--text-muted); font-size:0.85rem;">-</td>
+            <td></td>
+          </tr>
+        `;
+      }
+
+      if (entries.length === 0) {
+        const emptyMsg = isFiltered
+          ? `No items matching "${escapeHtml(currentFilterQuery)}"`
+          : 'No files found in this folder';
+        rows += `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1.5rem;">${emptyMsg}</td></tr>`;
+      } else {
+        entries.forEach(item => {
+          const itemPath = (currentDir === '/' ? '/' : currentDir + '/') + item.name;
+          const icon = getFileIcon(item.name, item.is_dir);
+          const itemSize = Number(item.size) || 0;
+          const formattedSize = formatBytes(itemSize);
+
+          const pct = totalFolderBytes > 0 ? (itemSize / totalFolderBytes) * 100 : 0;
+          const pctDisplay = pct >= 10 ? Math.round(pct) + '%' : (pct > 0 ? pct.toFixed(1) + '%' : '0%');
+          const barWidth = Math.min(Math.max(pct, pct > 0 ? 3 : 0), 100);
+
+          const sizeHtml = `
+            <div class="size-cell-box">
+              <div class="size-line">
+                <span class="size-val">${formattedSize}</span>
+                <span class="size-pct ${item.is_dir ? 'dir-pct' : ''}" title="${pct.toFixed(1)}% of folder">${pctDisplay}</span>
+              </div>
+              <div class="size-bar-bg" title="${pct.toFixed(1)}% of current directory (${formattedSize})">
+                <div class="size-bar-fill ${item.is_dir ? 'dir-fill' : ''}" style="width: ${barWidth}%;"></div>
+              </div>
+            </div>
+          `;
+
+          const isText = isViewable(item.name);
+          const safePath = escapeJs(itemPath);
+          const safeName = escapeJs(item.name);
+          const escapedName = escapeHtml(item.name);
+
+          const nameHtml = item.is_dir
+            ? `<a class="folder-link" onclick="navigateTo('${safePath}')">${escapedName}</a>`
+            : (isText
+                ? `<a class="file-view-link" onclick="viewFile('${safePath}', '${safeName}', ${itemSize})" title="View ${escapedName}">${escapedName}</a>`
+                : `<span>${escapedName}</span>`);
+
+          let actions = '<div class="actions-cell">';
+          if (!item.is_dir) {
+            if (isText) {
+              actions += `
+                <button type="button" onclick="viewFile('${safePath}', '${safeName}', ${itemSize})" class="action-btn action-view" title="View ${escapedName}">
+                  <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
+              `;
+            }
+            actions += `
+              <a href="/api/download?path=${encodeURIComponent(itemPath)}" class="action-btn action-download" download="${escapedName}" title="Download ${escapedName}">
+                <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+              </a>
+            `;
+          }
+          actions += `
+            <button type="button" onclick="deleteResource('${safePath}')" class="action-btn action-delete" title="Delete ${item.is_dir ? 'folder' : 'file'}">
+              <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+          `;
+          actions += '</div>';
+
+          rows += `
+            <tr>
+              <td class="col-name">
+                <span class="col-icon">${icon}</span>
+                ${nameHtml}
+              </td>
+              <td>${sizeHtml}</td>
+              <td>${actions}</td>
+            </tr>
+          `;
+        });
+      }
+
+      tbody.innerHTML = rows;
     }
 
     async function loadDirectoryFiles() {
@@ -646,62 +972,8 @@
           return;
         }
 
-        const entries = data.entries || [];
-        currentEntries = entries;
-        let rows = '';
-
-        if (currentDir !== '/') {
-          rows += `
-            <tr>
-              <td class="col-name">
-                <span class="col-icon">📁</span>
-                <a class="folder-link" onclick="navigateUp()">.. [Parent Directory]</a>
-              </td>
-              <td style="color:var(--text-muted);">-</td>
-              <td></td>
-            </tr>
-          `;
-        }
-
-        if (entries.length === 0) {
-          rows += `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No files found in this folder</td></tr>`;
-        } else {
-          entries.forEach(item => {
-            const itemPath = (currentDir === '/' ? '/' : currentDir + '/') + item.name;
-            const icon = getFileIcon(item.name, item.is_dir);
-            const size = item.is_dir ? '-' : formatBytes(item.size);
-
-            const isText = isViewable(item.name);
-            const nameHtml = item.is_dir
-              ? `<a class="folder-link" onclick="navigateTo('${itemPath}')">${item.name}</a>`
-              : (isText
-                  ? `<a class="file-view-link" onclick="viewFile('${itemPath}', '${item.name}', ${item.size})" title="View file">${item.name}</a>`
-                  : `<span>${item.name}</span>`);
-
-            let actions = '<div class="actions-cell">';
-            if (!item.is_dir) {
-              if (isText) {
-                actions += `<button onclick="viewFile('${itemPath}', '${item.name}', ${item.size})" class="btn btn-sm btn-secondary" title="View file">👁 View</button>`;
-              }
-              actions += `<a href="/api/download?path=${encodeURIComponent(itemPath)}" class="btn btn-sm" download="${item.name}">⬇ Download</a>`;
-            }
-            actions += `<button onclick="deleteResource('${itemPath}')" class="btn btn-sm btn-danger">🗑 Delete</button>`;
-            actions += '</div>';
-
-            rows += `
-              <tr>
-                <td class="col-name">
-                  <span class="col-icon">${icon}</span>
-                  ${nameHtml}
-                </td>
-                <td style="color:var(--text-muted); font-size:0.85rem;">${size}</td>
-                <td>${actions}</td>
-              </tr>
-            `;
-          });
-        }
-
-        tbody.innerHTML = rows;
+        currentEntries = data.entries || [];
+        applyTableFilter();
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="3" style="color:var(--danger); text-align:center; padding:1.5rem;">Network disconnected</td></tr>';
       }

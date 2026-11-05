@@ -82,6 +82,29 @@ class StorageManager:
         return "/".join(parts[:-1])
 
     @staticmethod
+    def get_dir_size(target):
+        """Recursively calculate total bytes in a directory tree."""
+        total = 0
+        try:
+            for item in os.ilistdir(target):
+                name = item[0]
+                is_dir = (item[1] == 0x4000)
+                sub_path = target + "/" + name if target != "/" else "/" + name
+                if is_dir:
+                    total += StorageManager.get_dir_size(sub_path)
+                else:
+                    if len(item) > 3:
+                        total += item[3]
+                    else:
+                        try:
+                            total += os.stat(sub_path)[6]
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        return total
+
+    @staticmethod
     def list_dir(path="/"):
         """
         List directory contents.
@@ -96,14 +119,16 @@ class StorageManager:
                 name = item[0]
                 entry_type = item[1]
                 is_dir = (entry_type == 0x4000)
+                full_path = StorageManager.join(target, name)
 
                 size = 0
-                if not is_dir:
+                if is_dir:
+                    size = StorageManager.get_dir_size(full_path)
+                else:
                     if len(item) > 3:
                         size = item[3]
                     else:
                         try:
-                            full_path = StorageManager.join(target, name)
                             size = os.stat(full_path)[6]
                         except Exception:
                             size = 0

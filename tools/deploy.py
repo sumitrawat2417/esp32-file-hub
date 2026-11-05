@@ -10,12 +10,20 @@ import sys
 import time
 import json
 
+def pause_if_interactive():
+    """Wait for Enter key only when running in an interactive terminal without --no-pause."""
+    if "--no-pause" not in sys.argv and sys.stdin and sys.stdin.isatty():
+        try:
+            input("\nPress Enter to exit...")
+        except Exception:
+            pass
+
 try:
     import serial
     import serial.tools.list_ports
 except ImportError:
     print("Error: 'pyserial' is required. Run: pip install pyserial")
-    input("\nPress Enter to exit...")
+    pause_if_interactive()
     sys.exit(1)
 
 
@@ -192,7 +200,7 @@ def deploy():
     if not port:
         print("\n[!] No ESP32 detected.")
         print("    Please connect your ESP32 with a USB data cable and try again.")
-        input("\nPress Enter to exit...")
+        pause_if_interactive()
         return
 
     print("Found ESP32 on port: {}".format(port))
@@ -200,7 +208,7 @@ def deploy():
 
     print("Connecting to ESP32...")
     if not uploader.connect():
-        input("\nPress Enter to exit...")
+        pause_if_interactive()
         return
 
     base_dir = get_base_dir()
@@ -281,7 +289,7 @@ def deploy():
     print("   If using AP Host : Connect PC Wi-Fi to 'ESP32-FileTransfer'.")
     print("3. To change Wi-Fi  : Click '📶 Wi-Fi' in the web interface or run 'setup_wifi.py'!")
     print("=" * 56)
-    input("\nPress Enter to exit...")
+    pause_if_interactive()
 
 
 if __name__ == "__main__":

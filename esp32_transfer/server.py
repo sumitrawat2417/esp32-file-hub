@@ -10,8 +10,16 @@ import json
 import os
 import time
 
-from app.storage import StorageManager
-from app.dns import DNSServer
+try:
+    from .storage import StorageManager
+    from .dns import DNSServer
+except (ImportError, ValueError):
+    try:
+        from esp32_transfer.storage import StorageManager
+        from esp32_transfer.dns import DNSServer
+    except (ImportError, ValueError):
+        from storage import StorageManager
+        from dns import DNSServer
 
 
 class WebServer:
@@ -21,7 +29,7 @@ class WebServer:
         srv_cfg = config.get("server", {})
         self.port = srv_cfg.get("port", 80)
         self.chunk_size = srv_cfg.get("chunk_size", 1024)
-        self.static_dir = srv_cfg.get("static_dir", "www")
+        self.static_dir = srv_cfg.get("static_dir", "esp32_transfer/www")
         self.ip_address = ip_address
         self.hostname = hostname
         self.config = config
@@ -145,14 +153,35 @@ class WebServer:
         else:
             self._send_error(client, 404, "Endpoint '{}' not found".format(path))
 
+    def _find_index_file(self):
+        """Locate index.html across standard library and project paths."""
+        candidates = [
+            self.static_dir + "/index.html",
+            "esp32_transfer/www/index.html",
+            "/esp32_transfer/www/index.html",
+            "www/index.html",
+            "/www/index.html",
+        ]
+        for p in candidates:
+            try:
+                os.stat(p)
+                return p
+            except Exception:
+                pass
+        return None
+
     def _serve_index(self, client):
-        """Stream www/index.html directly from flash to save RAM."""
-        index_path = self.static_dir + "/index.html"
+        """Stream index.html directly from flash to save RAM."""
+        index_path = self._find_index_file()
+        if not index_path:
+            self._send_error(client, 500, "Web asset 'index.html' not found on ESP32 flash")
+            return
+
         try:
             stat = os.stat(index_path)
             file_size = stat[6]
         except OSError:
-            self._send_error(client, 500, "Web asset 'www/index.html' not found on ESP32 flash")
+            self._send_error(client, 500, "Web asset 'index.html' not readable on ESP32 flash")
             return
 
         header = "HTTP/1.1 200 OK\r\n"
@@ -173,8 +202,6 @@ class WebServer:
                     client.write(chunk)
         except Exception as e:
             print("[Server] Error streaming index.html: {}".format(e))
-        finally:
-            gc.collect()
 
     def _handle_get_storage(self, client):
         """API handler: GET /api/storage"""
@@ -183,71 +210,47 @@ class WebServer:
 
     def _handle_get_files(self, client, query_params):
         """API handler: GET /api/files?path=/..."""
-        target = query_params.get("path", "/")
-        entries = StorageManager.list_dir(target)
+        path = query_params.get("path", "/")
+        entries = StorageManager.list_dir(path)
         if entries is None:
-            self._send_error(client, 404, "Directory '{}' not found".format(target))
-            return
-
-        self._send_json(client, {
-            "path": StorageManager.normalize_path(target),
-            "entries": entries
-        })
+            self._send_error(client, 404, "Directory '{}' does not exist".format(path))
+        else:
+            self._send_json(client, {"path": StorageManager.normalize_path(path), "entries": entries})
 
     def _handle_create_directory(self, client, query_params):
         """API handler: POST /api/mkdir?path=/..."""
-        target = query_params.get("path", "")
-        if not target or target == "/":
+        path = query_params.get("path", "")
+        if not path:
             self._send_error(client, 400, "Directory path parameter required")
             return
 
-        if StorageManager.make_dir(target):
-            self._send_json(client, {"success": True, "path": StorageManager.normalize_path(target)}, status_code=201)
+        if StorageManager.make_dir(path):
+            self._send_json(client, {"success": True, "path": StorageManager.normalize_path(path)}, status_code=201)
         else:
-            self._send_error(client, 500, "Failed to create directory")
-
-    def _handle_delete(self, client, query_params):
-        """API handler: DELETE /api/files?path=/..."""
-        target = query_params.get("path", "")
-        if not target or target == "/":
-            self._send_error(client, 400, "Path parameter required")
-            return
-
-        if StorageManager.delete(target):
-            self._send_json(client, {"success": True, "deleted": StorageManager.normalize_path(target)})
-        else:
-            self._send_error(client, 500, "Failed to delete item")
+            self._send_error(client, 500, "Failed to create directory '{}'".format(path))
 
     def _handle_download(self, client, query_params):
-        """API handler: GET /api/download?path=/..."""
-        raw_path = query_params.get("path", "")
-        if not raw_path or raw_path == "/":
-            self._send_error(client, 400, "Path parameter required")
-            return
+        """API handler: GET /api/download?path=/... (Streams binary chunked)"""
+        path = query_params.get("path", "")
+        target = StorageManager.normalize_path(path)
 
-        target = StorageManager.normalize_path(raw_path)
-        try:
-            stat = os.stat(target)
-            if stat[0] & 0x4000:
-                self._send_error(client, 400, "Cannot download a directory")
-                return
-            file_size = stat[6]
-        except OSError:
-            self._send_error(client, 404, "File not found")
+        if not StorageManager.exists(target) or StorageManager.is_dir(target):
+            self._send_error(client, 404, "File '{}' not found".format(path))
             return
 
         filename = target.split("/")[-1]
+        try:
+            stat = os.stat(target)
+            file_size = stat[6]
+        except OSError:
+            self._send_error(client, 500, "Cannot access file")
+            return
+
         header = "HTTP/1.1 200 OK\r\n"
         header += "Content-Type: application/octet-stream\r\n"
-        header += "Content-Length: {}\r\n".format(file_size)
         header += "Content-Disposition: attachment; filename=\"{}\"\r\n".format(filename)
-        header += "Connection: close\r\n"
-        header += "Access-Control-Allow-Origin: *\r\n\r\n"
-
-        try:
-            client.settimeout(20.0)
-        except Exception:
-            pass
+        header += "Content-Length: {}\r\n".format(file_size)
+        header += "Connection: close\r\n\r\n"
 
         try:
             client.write(header.encode("utf-8"))
@@ -257,36 +260,40 @@ class WebServer:
                     if not chunk:
                         break
                     client.write(chunk)
-            print("[Server] Download streamed: '{}' ({} bytes)".format(target, file_size))
         except Exception as e:
-            print("[Server] Error streaming download: {}".format(e))
-        finally:
-            gc.collect()
+            print("[Server] Download stream interrupted: {}".format(e))
 
-    def _handle_get_hash(self, client, query_params):
-        """API handler: GET /api/hash?path=/... (Returns SHA-256 and size for integrity check)."""
-        raw_path = query_params.get("path", "")
-        if not raw_path or raw_path == "/":
-            self._send_error(client, 400, "Path parameter required")
+    def _handle_delete(self, client, query_params):
+        """API handler: DELETE /api/files?path=/..."""
+        path = query_params.get("path", "")
+        target = StorageManager.normalize_path(path)
+
+        if target == "/" or not StorageManager.exists(target):
+            self._send_error(client, 404, "Target '{}' does not exist".format(path))
             return
 
-        target = StorageManager.normalize_path(raw_path)
-        try:
-            stat = os.stat(target)
-            file_size = stat[6]
-            digest = StorageManager.compute_sha256(target)
-            if digest is None:
-                self._send_error(client, 404, "File not found")
-                return
+        if StorageManager.delete(target):
+            self._send_json(client, {"success": True, "path": target})
+        else:
+            self._send_error(client, 500, "Failed to delete '{}'".format(path))
 
-            self._send_json(client, {"path": target, "sha256": digest, "size": file_size})
-        except OSError:
-            self._send_error(client, 404, "File not found")
-        finally:
-            gc.collect()
+    def _handle_get_hash(self, client, query_params):
+        """API handler: GET /api/hash?path=/..."""
+        path = query_params.get("path", "")
+        target = StorageManager.normalize_path(path)
+
+        if not StorageManager.exists(target) or StorageManager.is_dir(target):
+            self._send_error(client, 404, "File '{}' not found".format(path))
+            return
+
+        digest = StorageManager.compute_sha256(target)
+        if digest:
+            self._send_json(client, {"path": target, "sha256": digest})
+        else:
+            self._send_error(client, 500, "Failed to compute checksum")
 
     def _handle_get_wifi(self, client):
-        """API handler: GET /api/wifi (Returns current Wi-Fi status and configured STA SSID)."""
+        """API handler: GET /api/wifi (Returns current Wi-Fi status and saved SSID)"""
         sta_ssid = self.config.get("wifi", {}).get("sta_ssid", "")
         ap_ssid = self.config.get("wifi", {}).get("ap_ssid", "ESP32-FileTransfer")
         self._send_json(client, {
@@ -294,17 +301,20 @@ class WebServer:
             "ip": self.ip_address,
             "hostname": self.hostname,
             "connected_ssid": self.wifi_status.get("ssid", ap_ssid),
-            "sta_ssid": sta_ssid,
-            "ap_ssid": ap_ssid,
-            "mdns_url": "http://{}.local/".format(self.hostname)
+            "saved_sta_ssid": sta_ssid,
+            "ap_ssid": ap_ssid
         })
 
     def _handle_set_wifi(self, client, headers, initial_body):
-        """API handler: POST /api/wifi (Update Wi-Fi credentials and persist to config.json)."""
-        content_length = int(headers.get("content-length", 0))
+        """API handler: POST /api/wifi (Updates Wi-Fi credentials in config.json and reboots)"""
+        try:
+            content_length = int(headers.get("content-length", 0))
+        except (ValueError, TypeError):
+            content_length = 0
+
         body = initial_body
         while len(body) < content_length:
-            chunk = client.recv(content_length - len(body))
+            chunk = client.recv(min(512, content_length - len(body)))
             if not chunk:
                 break
             body += chunk
@@ -315,7 +325,14 @@ class WebServer:
             self._send_error(client, 400, "Invalid JSON payload")
             return
 
-        from app.config import ConfigManager
+        try:
+            from .config import ConfigManager
+        except (ImportError, ValueError):
+            try:
+                from esp32_transfer.config import ConfigManager
+            except (ImportError, ValueError):
+                from config import ConfigManager
+
         config = ConfigManager.load()
         if "wifi" not in config:
             config["wifi"] = {}

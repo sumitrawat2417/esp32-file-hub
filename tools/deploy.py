@@ -34,7 +34,7 @@ def get_base_dir():
     # If this script is in tools/, the project root is one level up
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.abspath(os.path.join(script_dir, ".."))
-    if os.path.exists(os.path.join(parent_dir, "app")):
+    if os.path.exists(os.path.join(parent_dir, "esp32_transfer")):
         return parent_dir
     return script_dir
 
@@ -104,14 +104,51 @@ class RawReplUploader:
         return resp
 
     def make_remote_dir(self, dir_path):
-        """Create directory on ESP32."""
+        """Recursively ensure a directory path exists on ESP32."""
+        code = (
+            "import os\n"
+            "d = '{0}'\n"
+            "parts = d.strip('/').split('/')\n"
+            "curr = ''\n"
+            "for p in parts:\n"
+            "    curr = (curr + '/' + p) if curr else p\n"
+            "    try:\n"
+            "        os.mkdir(curr)\n"
+            "    except:\n"
+            "        pass\n"
+        ).format(dir_path)
+        self.execute(code)
+
+    def remove_file(self, remote_path):
+        """Remove file if it exists."""
         code = (
             "import os\n"
             "try:\n"
-            "    os.mkdir('{0}')\n"
+            "    os.remove('{0}')\n"
             "except:\n"
             "    pass\n"
-        ).format(dir_path)
+        ).format(remote_path)
+        self.execute(code)
+
+    def remove_dir_recursive(self, remote_dir):
+        """Recursively remove a directory and its contents on the board."""
+        code = (
+            "import os\n"
+            "def _rm(d):\n"
+            "    try:\n"
+            "        for i in os.listdir(d):\n"
+            "            p = d + '/' + i\n"
+            "            try:\n"
+            "                _rm(p)\n"
+            "            except:\n"
+            "                try: os.remove(p)\n"
+            "                except: pass\n"
+            "        os.rmdir(d)\n"
+            "    except:\n"
+            "        try: os.remove(d)\n"
+            "        except: pass\n"
+            "_rm('{0}')\n"
+        ).format(remote_dir)
         self.execute(code)
 
     def get_remote_hashes(self, remote_paths):
@@ -221,23 +258,43 @@ def deploy():
     else:
         config_source = "config.example.json"
 
-    # Files to sync: (relative path from base_dir, target path on ESP32)
+    # Clean up all legacy files and folders from root so EVERYTHING is packed inside esp32_transfer/
+    root_cleanup_files = [
+        "file_manager.py",
+        "web_server.py",
+        "wifi_manager.py",
+        "setup_wifi.py",
+        "esp32_transfer.py",
+        "config.json",
+        "main.py",
+    ]
+    for obs in root_cleanup_files:
+        uploader.remove_file(obs)
+
+    # Clean up legacy folders if migrating to esp32_transfer/
+    uploader.remove_dir_recursive("lib")
+    uploader.remove_dir_recursive("app")
+    uploader.remove_dir_recursive("www")
+
+    # Files to sync: 100% packed inside esp32_transfer/
+    pkg_config = os.path.join(base_dir, "esp32_transfer", "config.json")
+    if not os.path.exists(pkg_config):
+        pkg_config = os.path.join(base_dir, config_source)
+
     files_to_sync = [
-        ("boot.py", "boot.py"),
-        ("esp32_transfer.py", "esp32_transfer.py"),
-        ("main.py", "main.py"),
-        ("setup_wifi.py", "setup_wifi.py"),
-        (config_source, "config.json"),
-        (os.path.join("www", "index.html"), "www/index.html"),
-        (os.path.join("app", "__init__.py"), "app/__init__.py"),
-        (os.path.join("app", "config.py"), "app/config.py"),
-        (os.path.join("app", "wifi.py"), "app/wifi.py"),
-        (os.path.join("app", "dns.py"), "app/dns.py"),
-        (os.path.join("app", "storage.py"), "app/storage.py"),
-        (os.path.join("app", "server.py"), "app/server.py"),
+        (os.path.join("esp32_transfer", "__init__.py"), "esp32_transfer/__init__.py"),
+        (os.path.join("esp32_transfer", "app.py"), "esp32_transfer/app.py"),
+        (os.path.join("esp32_transfer", "config.py"), "esp32_transfer/config.py"),
+        (pkg_config, "esp32_transfer/config.json"),
+        (os.path.join("esp32_transfer", "wifi.py"), "esp32_transfer/wifi.py"),
+        (os.path.join("esp32_transfer", "dns.py"), "esp32_transfer/dns.py"),
+        (os.path.join("esp32_transfer", "storage.py"), "esp32_transfer/storage.py"),
+        (os.path.join("esp32_transfer", "server.py"), "esp32_transfer/server.py"),
+        (os.path.join("esp32_transfer", "setup_wifi.py"), "esp32_transfer/setup_wifi.py"),
+        (os.path.join("esp32_transfer", "www", "index.html"), "esp32_transfer/www/index.html"),
     ]
 
-    dirs_to_create = ["app", "www"]
+    dirs_to_create = ["esp32_transfer", "esp32_transfer/www"]
     for d in dirs_to_create:
         uploader.make_remote_dir(d)
 
@@ -258,9 +315,9 @@ def deploy():
         local_hash = compute_local_sha256(local_full)
         remote_hash = (remote_hashes.get(remote) or "").lower()
 
-        # Safety: If board already has a config.json and local only has config.example.json, don't overwrite board config!
-        if remote == "config.json" and rel_local == "config.example.json" and remote_hash:
-            print("[{}/{}] Preserving existing board config: config.json (skipped)".format(idx, total))
+        # Safety: If board already has saved config.json on flash, don't overwrite saved Wi-Fi credentials
+        if remote.endswith("config.json") and remote_hash:
+            print("[{}/{}] Preserving existing board config: {} (skipped)".format(idx, total, remote))
             skipped_count += 1
             continue
 
@@ -283,11 +340,16 @@ def deploy():
     print("=" * 56)
     print("Rebooting ESP32...")
     uploader.reboot()
-    print("\nYour ESP32 is ready!")
-    print("1. Open your browser: http://esp32.local/ (or http://192.168.4.1/)")
-    print("2. If using Hotspot : Keep your PC on your hotspot/home Wi-Fi.")
-    print("   If using AP Host : Connect PC Wi-Fi to 'ESP32-FileTransfer'.")
-    print("3. To change Wi-Fi  : Click '📶 Wi-Fi' in the web interface or run 'setup_wifi.py'!")
+    print("\nYour ESP32 is ready! All files are packed in 'esp32_transfer/'.")
+    print("1. From Terminal / REPL (1-line command):")
+    print("   >>> import esp32_transfer; esp32_transfer.start()")
+    print("2. From Thonny IDE:")
+    print("   Open 'esp32_transfer/app.py' and click Run (F5)!")
+    print("3. In Web Browser:")
+    print("   Open: http://esp32.local/ (or http://192.168.4.1/)")
+    print("4. Configure Wi-Fi from REPL:")
+    print("   >>> import esp32_transfer; esp32_transfer.setup_wifi()")
+    print("   (or click '📶 Wi-Fi' in the web interface)")
     print("=" * 56)
     pause_if_interactive()
 

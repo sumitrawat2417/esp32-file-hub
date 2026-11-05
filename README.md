@@ -37,22 +37,22 @@ Normally, copying these files requires tethering the board to a computer via USB
 
 ```text
 esp32-transfer/
-├── app/                      # Core MicroPython application package
-│   ├── __init__.py           # Package version & metadata
+├── esp32_transfer/           # Self-contained application package
+│   ├── __init__.py           # Package exports: start(), setup_wifi()
+│   ├── app.py                # Standalone Thonny runner (Run with F5)
 │   ├── config.py             # ConfigManager: schema validation & defaults
+│   ├── config.json           # Wi-Fi & server settings (inside package)
 │   ├── wifi.py               # WiFiManager: OOP network controller with AP failover
-│   ├── storage.py            # StorageManager: atomic file I/O & traversal protection
-│   └── server.py             # WebServer: non-blocking HTTP socket server & REST routing
-├── www/                      # Decoupled web frontend
-│   └── index.html            # Production SPA (vanilla HTML/CSS/JS, zero external CDNs)
+│   ├── dns.py                # DNSServer: captive portal & mDNS resolution
+│   ├── storage.py            # StorageManager: atomic file I/O & size tracking
+│   ├── server.py             # WebServer: non-blocking HTTP socket server & REST API
+│   ├── setup_wifi.py         # Interactive terminal Wi-Fi setup wizard
+│   └── www/                  # Embedded web frontend
+│       └── index.html        # Production SPA (vanilla HTML/CSS/JS, zero external CDNs)
 ├── tools/                    # Desktop utilities & deployers
 │   ├── deploy.py             # Automated uploader (auto-detects COM port)
 │   └── build_installer.bat   # PyInstaller build recipe
 ├── install.bat               # 1-Click Windows desktop launcher
-├── main.py                   # Standard application entry point (autostarts on boot)
-├── boot.py                   # MicroPython boot configuration
-├── config.example.json       # Distribution template for version control
-├── config.json               # Local runtime configuration
 ├── README.md                 # Public documentation
 └── .gitignore                # Protects internal docs/, pycache, etc.
 ```
@@ -68,11 +68,33 @@ Connect your ESP32 to your PC via USB:
   ```bash
   python tools/deploy.py
   ```
-*The script will auto-detect your ESP32's serial port, upload all `app/`, `www/`, and runtime files, and soft-reboot the board.*
+*The installer automatically cleans all legacy files from root, packs everything inside `esp32_transfer/`, and soft-reboots the device.*
 
-### 2. Connect & Open the Web App
-1. On your phone, tablet, or laptop, connect to the Wi-Fi network:  
-   **SSID:** `ESP32-FileTransfer` *(Open network by default)*
+### 2. Run the Application
+You have two effortless options:
+
+- **Single-Line Terminal Command (Thonny REPL / Serial)**:
+  ```python
+  import esp32_transfer; esp32_transfer.start()
+  ```
+- **Or Click Run in Thonny**:
+  Open **`esp32_transfer/app.py`** in Thonny and press **F5** (Run)!
+
+### 3. Connect & Open the Web App
+1. On your phone, tablet, or PC, connect to the Wi-Fi network:  
+   **SSID:** `ESP32-FileTransfer` *(Open network by default)*  
+   *(Or keep PC on your mobile hotspot if configured)*
+2. Open your web browser and navigate to:  
+   👉 **`http://esp32.local/`** (or **`http://192.168.4.1/`**)
+3. Browse, upload, create folders, inspect file percentages, and download files directly!
+
+### 4. Interactive Wi-Fi Setup
+To connect your ESP32 to your home Wi-Fi or PC Hotspot:
+- In the Web UI: Click **`📶 Wi-Fi`** at the top right, or
+- In Terminal / REPL:
+  ```python
+  import esp32_transfer; esp32_transfer.setup_wifi()
+  ```
 2. Open your web browser and navigate to:  
    👉 **`http://192.168.4.1/`**
 3. Browse, upload, create folders, and download files directly!

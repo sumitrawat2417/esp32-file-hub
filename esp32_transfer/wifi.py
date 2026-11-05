@@ -188,7 +188,14 @@ class WiFiManager:
                 self.sta_password = password
                 if self._start_sta():
                     try:
-                        from app.config import ConfigManager
+                        try:
+                            from .config import ConfigManager
+                        except (ImportError, ValueError):
+                            try:
+                                from esp32_transfer.config import ConfigManager
+                            except (ImportError, ValueError):
+                                from config import ConfigManager
+
                         cfg = ConfigManager.load()
                         if "wifi" not in cfg:
                             cfg["wifi"] = {}

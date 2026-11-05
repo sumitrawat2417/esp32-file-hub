@@ -10,7 +10,7 @@
   "server": {
     "port": 80,
     "chunk_size": 1024,
-    "static_dir": "www"
+    "static_dir": "esp32_transfer/www"
   }
 }
 

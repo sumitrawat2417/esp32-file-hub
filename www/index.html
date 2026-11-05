@@ -441,7 +441,7 @@
       <div class="modal-icon">⚠️</div>
       <div class="modal-title">File Conflict</div>
       <div class="modal-desc" id="conflictDescText">
-        A file named <strong id="conflictFilename" style="color:var(--primary);"></strong> already exists in this folder.
+        A file at <strong id="conflictFilename" style="color:var(--primary);"></strong> already exists on the board.
       </div>
       <div id="conflictComparison" style="background:rgba(11,19,41,0.6); border:1px solid rgba(30,58,95,0.6); border-radius:6px; padding:0.6rem; margin-bottom:1.25rem; font-size:0.82rem; text-align:left; font-family:monospace;">
         <div style="color:var(--text-muted);">Incoming File: <span id="conflictIncomingSize" style="color:var(--text); font-weight:600;"></span></div>
@@ -1042,6 +1042,9 @@
               const data = await checkRes.json();
               fileExists = true;
               esp32Hash = data.sha256;
+              if (data.size !== undefined) {
+                existingSize = data.size;
+              }
             }
           } catch (_) {}
         }

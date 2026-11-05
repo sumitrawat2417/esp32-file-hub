@@ -147,6 +147,8 @@ class WebServer:
         header = "HTTP/1.1 200 OK\r\n"
         header += "Content-Type: text/html; charset=utf-8\r\n"
         header += "Content-Length: {}\r\n"
+        header += "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+        header += "Pragma: no-cache\r\n"
         header += "Connection: close\r\n\r\n"
         header = header.format(file_size)
 
@@ -246,7 +248,7 @@ class WebServer:
             gc.collect()
 
     def _handle_get_hash(self, client, query_params):
-        """API handler: GET /api/hash?path=/... (Returns SHA-256 for integrity check)."""
+        """API handler: GET /api/hash?path=/... (Returns SHA-256 and size for integrity check)."""
         raw_path = query_params.get("path", "")
         if not raw_path or raw_path == "/":
             self._send_error(client, 400, "Path parameter required")
@@ -254,12 +256,16 @@ class WebServer:
 
         target = StorageManager.normalize_path(raw_path)
         try:
+            stat = os.stat(target)
+            file_size = stat[6]
             digest = StorageManager.compute_sha256(target)
             if digest is None:
                 self._send_error(client, 404, "File not found")
                 return
 
-            self._send_json(client, {"path": target, "sha256": digest})
+            self._send_json(client, {"path": target, "sha256": digest, "size": file_size})
+        except OSError:
+            self._send_error(client, 404, "File not found")
         finally:
             gc.collect()
 

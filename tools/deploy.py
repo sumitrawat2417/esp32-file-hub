@@ -105,6 +105,49 @@ class RawReplUploader:
         ).format(dir_path)
         self.execute(code)
 
+    def get_remote_hashes(self, remote_paths):
+        """Query SHA-256 hashes of remote files in a single fast Raw REPL batch call."""
+        code = (
+            "import os\n"
+            "try:\n"
+            "    import uhashlib as hashlib\n"
+            "except:\n"
+            "    import hashlib\n"
+            "try:\n"
+            "    import ubinascii as binascii\n"
+            "except:\n"
+            "    import binascii\n"
+            "try:\n"
+            "    import ujson as json\n"
+            "except:\n"
+            "    import json\n"
+            "targets = {0}\n"
+            "res = {{}}\n"
+            "for p in targets:\n"
+            "    try:\n"
+            "        h = hashlib.sha256()\n"
+            "        with open(p, 'rb') as f:\n"
+            "            while True:\n"
+            "                c = f.read(512)\n"
+            "                if not c: break\n"
+            "                h.update(c)\n"
+            "        res[p] = binascii.hexlify(h.digest()).decode('utf-8')\n"
+            "    except:\n"
+            "        res[p] = None\n"
+            "print('HASH_MAP:' + json.dumps(res))\n"
+        ).format(repr(remote_paths))
+
+        resp = self.execute(code).decode("utf-8", errors="ignore")
+        for line in resp.splitlines():
+            if "HASH_MAP:" in line:
+                raw_json = line[line.find("HASH_MAP:") + len("HASH_MAP:"):].strip()
+                try:
+                    import json
+                    return json.loads(raw_json)
+                except Exception:
+                    pass
+        return {}
+
     def upload_file(self, local_path, remote_path):
         """Upload file content using raw REPL."""
         with open(local_path, "rb") as f:
@@ -126,10 +169,23 @@ class RawReplUploader:
             self.ser.close()
 
 
+def compute_local_sha256(filepath):
+    """Compute local file SHA-256 hex digest."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest().lower()
+
+
 def deploy():
-    print("=" * 52)
-    print("     ESP32 File Transfer Tool - 1-Click Installer")
-    print("=" * 52)
+    print("=" * 56)
+    print("     ESP32 File Transfer Tool - Smart Installer")
+    print("=" * 56)
 
     port = find_esp32_port()
     if not port:
@@ -148,11 +204,15 @@ def deploy():
 
     base_dir = get_base_dir()
 
+    # Prefer local config.json if user customized it; otherwise fallback to config.example.json
+    local_config = os.path.join(base_dir, "config.json")
+    config_source = "config.json" if os.path.exists(local_config) else "config.example.json"
+
     # Files to sync: (relative path from base_dir, target path on ESP32)
     files_to_sync = [
         ("boot.py", "boot.py"),
         ("main.py", "main.py"),
-        ("config.example.json", "config.json"),
+        (config_source, "config.json"),
         (os.path.join("www", "index.html"), "www/index.html"),
         (os.path.join("app", "__init__.py"), "app/__init__.py"),
         (os.path.join("app", "config.py"), "app/config.py"),
@@ -166,29 +226,52 @@ def deploy():
     for d in dirs_to_create:
         uploader.make_remote_dir(d)
 
+    print("Checking board status (differential sync)...")
+    remote_targets = [remote for (_, remote) in files_to_sync]
+    remote_hashes = uploader.get_remote_hashes(remote_targets)
+
     total = len(files_to_sync)
+    updated_count = 0
+    skipped_count = 0
+
     for idx, (rel_local, remote) in enumerate(files_to_sync, start=1):
         local_full = os.path.join(base_dir, rel_local)
         if not os.path.exists(local_full):
-            if rel_local == "config.example.json":
-                local_full = os.path.join(base_dir, "config.json")
-            if not os.path.exists(local_full):
-                print("[!] Warning: Skipped '{}' (file not found)".format(rel_local))
-                continue
+            print("[!] Warning: Skipped '{}' (file not found)".format(rel_local))
+            continue
+
+        local_hash = compute_local_sha256(local_full)
+        remote_hash = (remote_hashes.get(remote) or "").lower()
+
+        # Safety: If board already has a config.json and local only has config.example.json, don't overwrite board config!
+        if remote == "config.json" and rel_local == "config.example.json" and remote_hash:
+            print("[{}/{}] Preserving existing board config: config.json (skipped)".format(idx, total))
+            skipped_count += 1
+            continue
+
+        if remote_hash and local_hash == remote_hash:
+            print("[{}/{}] Up-to-date: {} (identical, skipped)".format(idx, total, remote))
+            skipped_count += 1
+            continue
 
         size = os.path.getsize(local_full)
-        print("[{}/{}] Syncing {} ({} bytes)...".format(idx, total, remote, size))
+        action = "Updating" if remote_hash else "Writing"
+        print("[{}/{}] {} {} ({} bytes)...".format(idx, total, action, remote, size))
         uploader.upload_file(local_full, remote)
+        updated_count += 1
 
-    print("\n" + "=" * 52)
-    print(" [OK] All files successfully deployed!")
-    print("=" * 52)
+    print("\n" + "=" * 56)
+    if updated_count == 0:
+        print(" [OK] All files are already up-to-date! (0 flash writes)")
+    else:
+        print(" [OK] Sync complete! ({} updated, {} unchanged, flash wear minimized)".format(updated_count, skipped_count))
+    print("=" * 56)
     print("Rebooting ESP32...")
     uploader.reboot()
     print("\nYour ESP32 is ready!")
     print("1. Connect to Wi-Fi: 'ESP32-FileTransfer'")
-    print("2. Open your browser: http://192.168.4.1/")
-    print("=" * 52)
+    print("2. Open your browser: http://esp32.local/ or http://192.168.4.1/")
+    print("=" * 56)
     input("\nPress Enter to exit...")
 
 

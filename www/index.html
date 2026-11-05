@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32 File Transfer</title>
+  <style>
+    :root {
+      --bg: #0b1329;
+      --card-bg: #152238;
+      --card-border: #1e3a5f;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --accent: #2563eb;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #22c55e;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --row-hover: #1c2e4a;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.5rem 1rem;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 800px; margin: 0 auto; }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .brand svg { width: 28px; height: 28px; fill: var(--primary); }
+    .brand-title { font-size: 1.35rem; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+    .badge-ip {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--primary);
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      font-weight: 600;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Storage Overview */
+    .storage-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .storage-stat {
+      background: rgba(11, 19, 41, 0.5);
+      border: 1px solid rgba(30, 58, 95, 0.5);
+      padding: 0.75rem;
+      border-radius: 8px;
+    }
+    .storage-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .storage-value { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-top: 0.25rem; }
+    .progress-bar {
+      height: 8px;
+      background: #1e293b;
+      border-radius: 9999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #2563eb);
+      width: 0%;
+      transition: width 0.4s ease;
+      border-radius: 9999px;
+    }
+
+    /* Upload Zone */
+    .dropzone {
+      border: 2px dashed #2b456b;
+      border-radius: var(--radius);
+      padding: 1.75rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(11, 19, 41, 0.3);
+      transition: all 0.2s ease;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.05);
+    }
+    .dropzone-icon { width: 36px; height: 36px; fill: var(--primary); margin-bottom: 0.5rem; }
+    .dropzone-text { font-size: 0.95rem; font-weight: 500; }
+    .dropzone-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .target-tag { color: var(--primary); font-family: monospace; font-weight: 600; }
+
+    /* Toolbar & Breadcrumbs */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.9rem;
+      flex-wrap: wrap;
+    }
+    .crumb {
+      color: var(--primary);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .crumb:hover { background: rgba(56, 189, 248, 0.15); text-decoration: underline; }
+    .crumb-sep { color: var(--text-muted); opacity: 0.6; }
+    .crumb-active { color: var(--text); font-weight: 600; padding: 2px 6px; }
+
+    .btn-group { display: flex; gap: 0.5rem; }
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn-secondary { background: #1e3a5f; color: var(--text); }
+    .btn-secondary:hover { background: #274773; }
+    .btn-sm { padding: 0.25rem 0.6rem; font-size: 0.78rem; border-radius: 4px; }
+    .btn-danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { background: var(--danger); color: white; }
+
+    /* File Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th {
+      text-align: left;
+      padding: 0.75rem 0.6rem;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    td {
+      padding: 0.7rem 0.6rem;
+      border-bottom: 1px solid rgba(30, 58, 95, 0.4);
+      vertical-align: middle;
+    }
+    tr:hover td { background: var(--row-hover); }
+    .col-name { display: flex; align-items: center; gap: 0.6rem; font-weight: 500; }
+    .col-icon { font-size: 1.15rem; line-height: 1; }
+    .folder-link {
+      color: var(--primary);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .folder-link:hover { text-decoration: underline; }
+    .actions-cell { display: flex; gap: 0.4rem; justify-content: flex-end; }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .toast {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      font-size: 0.88rem;
+      animation: slideIn 0.2s ease;
+    }
+    .toast-success { border-color: var(--success); }
+    .toast-error { border-color: var(--danger); }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    @media (max-width: 600px) {
+      .storage-grid { grid-template-columns: 1fr; }
+      header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+        <span class="brand-title">ESP32 File Transfer</span>
+      </div>
+      <div class="badge-ip" id="badgeIp">192.168.4.1</div>
+    </header>
+
+    <!-- Storage Capacity -->
+    <div class="card">
+      <div class="storage-grid">
+        <div class="storage-stat">
+          <div class="storage-label">Available Storage</div>
+          <div class="storage-value" id="valFree">-</div>
+        </div>
+        <div class="storage-stat">
+          <div class="storage-label">Total Flash</div>
+          <div class="storage-value" id="valTotal">-</div>
+        </div>
+        <div class="storage-stat">
+          <div class="storage-label">Storage Used</div>
+          <div class="storage-value" id="valUsed">-</div>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="storageFill"></div></div>
+    </div>
+
+    <!-- Upload Zone -->
+    <div class="card">
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('filePicker').click()">
+        <svg class="dropzone-icon" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+        <div class="dropzone-text">Click or drop files to upload</div>
+        <div class="dropzone-sub">Destination: <span class="target-tag" id="targetDirTag">/</span> &bull; Supports multiple files</div>
+        <input type="file" id="filePicker" multiple style="display:none" onchange="handleFileSelect(this.files)">
+      </div>
+    </div>
+
+    <!-- File Browser -->
+    <div class="card">
+      <div class="toolbar">
+        <div class="breadcrumbs" id="crumbs"></div>
+        <div class="btn-group">
+          <button class="btn btn-secondary btn-sm" onclick="promptCreateFolder()">
+            <span>📁 New Folder</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="refreshCurrentDir()">
+            <span>🔄 Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th style="width: 110px;">Size</th>
+              <th style="width: 140px; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    let currentDir = '/';
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type === 'success' ? 'toast-success' : type === 'error' ? 'toast-error' : ''}`;
+      toast.innerText = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0) + ' ' + sizes[i];
+    }
+
+    function getFileIcon(filename, isDir) {
+      if (isDir) return '📁';
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['py'].includes(ext)) return '🐍';
+      if (['json', 'yaml', 'yml', 'toml'].includes(ext)) return '⚙️';
+      if (['html', 'css', 'js'].includes(ext)) return '🌐';
+      if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(ext)) return '🖼️';
+      if (['csv', 'txt', 'log', 'md'].includes(ext)) return '📄';
+      return '📦';
+    }
+
+    async function loadStorageMetrics() {
+      try {
+        const res = await fetch('/api/storage');
+        if (!res.ok) return;
+        const d = await res.json();
+        document.getElementById('valFree').innerText = `${d.free_mb} MB`;
+        document.getElementById('valTotal').innerText = `${d.total_mb} MB`;
+        document.getElementById('valUsed').innerText = `${d.used_pct}%`;
+        document.getElementById('storageFill').style.width = `${d.used_pct}%`;
+      } catch (e) {
+        console.error('Storage query failed', e);
+      }
+    }
+
+    function renderBreadcrumbs() {
+      const el = document.getElementById('crumbs');
+      const parts = currentDir.split('/').filter(p => p.length > 0);
+      let html = '<span class="crumb" onclick="navigateTo(\'/\')">Root (/)</span>';
+      let accum = '';
+      for (let i = 0; i < parts.length; i++) {
+        accum += '/' + parts[i];
+        const isLast = (i === parts.length - 1);
+        html += '<span class="crumb-sep">/</span>';
+        if (isLast) {
+          html += `<span class="crumb-active">${parts[i]}</span>`;
+        } else {
+          const pathTarget = accum;
+          html += `<span class="crumb" onclick="navigateTo('${pathTarget}')">${parts[i]}</span>`;
+        }
+      }
+      el.innerHTML = html;
+      document.getElementById('targetDirTag').innerText = currentDir;
+    }
+
+    async function navigateTo(path) {
+      currentDir = path || '/';
+      renderBreadcrumbs();
+      await loadDirectoryFiles();
+    }
+
+    function navigateUp() {
+      if (currentDir === '/') return;
+      const parts = currentDir.split('/').filter(p => p.length > 0);
+      parts.pop();
+      navigateTo(parts.length ? '/' + parts.join('/') : '/');
+    }
+
+    async function loadDirectoryFiles() {
+      const tbody = document.getElementById('fileTableBody');
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Reading directory...</td></tr>';
+
+      try {
+        const res = await fetch(`/api/files?path=${encodeURIComponent(currentDir)}`);
+        const data = await res.json();
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="3" style="color:var(--danger); text-align:center; padding:1.5rem;">${data.error || 'Failed to read directory'}</td></tr>`;
+          return;
+        }
+
+        const entries = data.entries || [];
+        let rows = '';
+
+        if (currentDir !== '/') {
+          rows += `
+            <tr>
+              <td class="col-name">
+                <span class="col-icon">📁</span>
+                <a class="folder-link" onclick="navigateUp()">.. [Parent Directory]</a>
+              </td>
+              <td style="color:var(--text-muted);">-</td>
+              <td></td>
+            </tr>
+          `;
+        }
+
+        if (entries.length === 0) {
+          rows += `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No files found in this folder</td></tr>`;
+        } else {
+          entries.forEach(item => {
+            const itemPath = (currentDir === '/' ? '/' : currentDir + '/') + item.name;
+            const icon = getFileIcon(item.name, item.is_dir);
+            const size = item.is_dir ? '-' : formatBytes(item.size);
+
+            const nameHtml = item.is_dir
+              ? `<a class="folder-link" onclick="navigateTo('${itemPath}')">${item.name}</a>`
+              : `<span>${item.name}</span>`;
+
+            let actions = '<div class="actions-cell">';
+            if (!item.is_dir) {
+              actions += `<a href="/api/download?path=${encodeURIComponent(itemPath)}" class="btn btn-sm">⬇ Download</a>`;
+            }
+            actions += `<button onclick="deleteResource('${itemPath}')" class="btn btn-sm btn-danger">🗑 Delete</button>`;
+            actions += '</div>';
+
+            rows += `
+              <tr>
+                <td class="col-name">
+                  <span class="col-icon">${icon}</span>
+                  ${nameHtml}
+                </td>
+                <td style="color:var(--text-muted); font-size:0.85rem;">${size}</td>
+                <td>${actions}</td>
+              </tr>
+            `;
+          });
+        }
+
+        tbody.innerHTML = rows;
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:var(--danger); text-align:center; padding:1.5rem;">Network disconnected</td></tr>';
+      }
+    }
+
+    async function promptCreateFolder() {
+      const name = prompt('Enter new folder name:');
+      if (!name || !name.trim()) return;
+      const target = (currentDir === '/' ? '/' : currentDir + '/') + name.trim();
+      try {
+        const res = await fetch(`/api/mkdir?path=${encodeURIComponent(target)}`, { method: 'POST' });
+        if (res.ok) {
+          showToast(`Created folder '${name.trim()}'`, 'success');
+          await loadDirectoryFiles();
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Failed to create folder', 'error');
+        }
+      } catch (e) {
+        showToast('Connection error', 'error');
+      }
+    }
+
+    async function deleteResource(path) {
+      if (!confirm(`Are you sure you want to delete ${path}?`)) return;
+      try {
+        const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Deleted ${path}`, 'success');
+          await loadDirectoryFiles();
+          await loadStorageMetrics();
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Failed to delete', 'error');
+        }
+      } catch (e) {
+        showToast('Connection error', 'error');
+      }
+    }
+
+    async function handleFileSelect(files) {
+      if (!files || !files.length) return;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const dest = (currentDir === '/' ? '/' : currentDir + '/') + f.name;
+        showToast(`Uploading ${f.name} (${formatBytes(f.size)})...`, 'info');
+        try {
+          const res = await fetch(`/api/upload?path=${encodeURIComponent(dest)}`, {
+            method: 'POST',
+            body: f
+          });
+          if (res.ok) {
+            showToast(`Uploaded ${f.name}`, 'success');
+          } else {
+            const err = await res.json();
+            showToast(`Upload failed for ${f.name}: ${err.error || ''}`, 'error');
+            break;
+          }
+        } catch (e) {
+          showToast(`Network error uploading ${f.name}`, 'error');
+          break;
+        }
+      }
+      await loadDirectoryFiles();
+      await loadStorageMetrics();
+    }
+
+    function refreshCurrentDir() {
+      loadStorageMetrics();
+      loadDirectoryFiles();
+      showToast('Refreshed', 'info');
+    }
+
+    // Drag and Drop
+    const dz = document.getElementById('dropzone');
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
+    dz.ondragleave = () => dz.classList.remove('dragover');
+    dz.ondrop = e => {
+      e.preventDefault();
+      dz.classList.remove('dragover');
+      handleFileSelect(e.dataTransfer.files);
+    };
+
+    window.onload = function() {
+      document.getElementById('badgeIp').innerText = window.location.hostname || '192.168.4.1';
+      loadStorageMetrics();
+      navigateTo('/');
+    };
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,15 @@
+{
+  "wifi": {
+    "sta_ssid": "",
+    "sta_password": "",
+    "ap_ssid": "ESP32-FileTransfer",
+    "ap_password": "",
+    "connect_timeout_s": 15
+  },
+  "server": {
+    "port": 80,
+    "chunk_size": 1024,
+    "static_dir": "www"
+  }
+}
+

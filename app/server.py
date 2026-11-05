@@ -52,11 +52,16 @@ class WebServer:
                     client_sock, client_addr = server_sock.accept()
                     client_sock.settimeout(5.0)
 
+                    # Accumulate HTTP request line and headers until \r\n\r\n delimiter
                     raw_chunk = b""
-                    try:
-                        raw_chunk = client_sock.recv(self.chunk_size)
-                    except OSError:
-                        pass
+                    while b"\r\n\r\n" not in raw_chunk and len(raw_chunk) < 4096:
+                        try:
+                            chunk = client_sock.recv(512)
+                            if not chunk:
+                                break
+                            raw_chunk += chunk
+                        except OSError:
+                            break
 
                     if raw_chunk:
                         self._dispatch_request(client_sock, raw_chunk)
@@ -234,6 +239,11 @@ class WebServer:
         header += "Access-Control-Allow-Origin: *\r\n\r\n"
 
         try:
+            client.settimeout(20.0)
+        except Exception:
+            pass
+
+        try:
             client.write(header.encode("utf-8"))
             with open(target, "rb") as f:
                 while True:
@@ -277,16 +287,23 @@ class WebServer:
             return
 
         target = StorageManager.normalize_path(raw_path)
+        if StorageManager.is_dir(target):
+            self._send_error(client, 400, "Cannot overwrite directory with a file")
+            return
+
         allow_overwrite = query_params.get("overwrite", "false").lower() == "true"
 
         if not allow_overwrite and StorageManager.exists(target):
             self._send_error(client, 409, "File '{}' already exists".format(target))
             return
 
-        content_length = int(headers.get("content-length", 0))
+        try:
+            content_length = int(headers.get("content-length", -1))
+        except (ValueError, TypeError):
+            content_length = -1
 
-        if content_length <= 0:
-            self._send_error(client, 400, "Content-Length header required and must be > 0")
+        if content_length < 0:
+            self._send_error(client, 400, "Content-Length header required")
             return
 
         metrics = StorageManager.get_metrics("/")
@@ -295,6 +312,11 @@ class WebServer:
                 content_length, metrics["free_bytes"]
             ))
             return
+
+        try:
+            client.settimeout(20.0)
+        except Exception:
+            pass
 
         print("[Server] Upload start: '{}' ({} bytes)".format(target, content_length))
         ok, written, err = StorageManager.write_stream(

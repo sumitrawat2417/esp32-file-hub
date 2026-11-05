@@ -32,7 +32,7 @@
 
     .container { max-width: 800px; margin: 0 auto; }
 
-    /* Header */
+    /*  Header  */
     header {
       display: flex;
       justify-content: space-between;
@@ -482,12 +482,21 @@
     </div>
   </div>
 
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
   <script>
     let currentDir = '/';
     let currentEntries = [];
 
     function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
+      let container = document.getElementById('toastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+      }
       const toast = document.createElement('div');
       toast.className = `toast ${type === 'success' ? 'toast-success' : type === 'error' ? 'toast-error' : ''}`;
       toast.innerText = message;
@@ -998,7 +1007,14 @@
 
       // Create any empty folders detected in a dropped folder tree
       for (const dirPath of emptyDirs) {
-        const dirTarget = (currentDir === '/' ? '/' : currentDir + '/') + dirPath;
+        let normalizedDirPath = dirPath;
+        if (currentDir !== '/') {
+          const prefix = currentDir.replace(/^\/+/, '') + '/';
+          if (normalizedDirPath.startsWith(prefix)) {
+            normalizedDirPath = normalizedDirPath.slice(prefix.length);
+          }
+        }
+        const dirTarget = (currentDir === '/' ? '/' : currentDir + '/') + normalizedDirPath;
         try {
           await fetch(`/api/mkdir?path=${encodeURIComponent(dirTarget)}`, { method: 'POST' });
         } catch (_) {}
@@ -1020,7 +1036,14 @@
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const relPath = f.webkitRelativePath || f.customRelativePath || f.name;
-        const dest = (currentDir === '/' ? '/' : currentDir + '/') + relPath;
+        let normalizedRelPath = relPath;
+        if (currentDir !== '/') {
+          const prefix = currentDir.replace(/^\/+/, '') + '/';
+          if (normalizedRelPath.startsWith(prefix)) {
+            normalizedRelPath = normalizedRelPath.slice(prefix.length);
+          }
+        }
+        const dest = (currentDir === '/' ? '/' : currentDir + '/') + normalizedRelPath;
 
         let fileExists = false;
         let existingSize = null;
@@ -1126,12 +1149,18 @@
           if (res.ok) {
             uploadedCount++;
           } else {
-            const err = await res.json();
-            showToast(`Upload failed for ${relPath}: ${err.error || ''}`, 'error');
+            let errMsg = `HTTP ${res.status}`;
+            try {
+              const err = await res.json();
+              if (err.error) errMsg = err.error;
+            } catch (_) {}
+            console.error(`Upload error on ${relPath}:`, errMsg);
+            showToast(`Upload failed for ${relPath}: ${errMsg}`, 'error');
             break;
           }
         } catch (e) {
-          showToast(`Network error uploading ${relPath}`, 'error');
+          console.error(`Network error uploading ${relPath}:`, e);
+          showToast(`Network error uploading ${relPath}: ${e.message || e}`, 'error');
           break;
         }
       }

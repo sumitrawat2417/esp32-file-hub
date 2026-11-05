@@ -184,6 +184,15 @@ class StorageManager:
             return False
 
     @staticmethod
+    def is_dir(path):
+        """Check whether a path exists and is a directory."""
+        target = StorageManager.normalize_path(path)
+        try:
+            return (os.stat(target)[0] & 0x4000) != 0
+        except OSError:
+            return False
+
+    @staticmethod
     def compute_sha256(path):
         """Compute SHA-256 checksum in 1 KB streaming chunks to save ESP32 memory."""
         target = StorageManager.normalize_path(path)
@@ -229,8 +238,9 @@ class StorageManager:
         try:
             with open(temp_path, "wb") as f:
                 if initial_chunk:
-                    f.write(initial_chunk)
-                    bytes_written += len(initial_chunk)
+                    to_write = initial_chunk[:content_length]
+                    f.write(to_write)
+                    bytes_written += len(to_write)
 
                 while bytes_written < content_length:
                     remaining = content_length - bytes_written

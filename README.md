@@ -45,9 +45,12 @@ esp32-transfer/
 │   └── server.py             # WebServer: non-blocking HTTP socket server & REST routing
 ├── www/                      # Decoupled web frontend
 │   └── index.html            # Production SPA (vanilla HTML/CSS/JS, zero external CDNs)
+├── tools/                    # Desktop utilities & deployers
+│   ├── deploy.py             # Automated uploader (auto-detects COM port)
+│   └── build_installer.bat   # PyInstaller build recipe
+├── install.bat               # 1-Click Windows desktop launcher
 ├── main.py                   # Standard application entry point (autostarts on boot)
 ├── boot.py                   # MicroPython boot configuration
-├── deploy.py                 # 1-Click desktop deployment script (auto-detects COM port)
 ├── config.example.json       # Distribution template for version control
 ├── config.json               # Local runtime configuration
 ├── README.md                 # Public documentation
@@ -59,11 +62,13 @@ esp32-transfer/
 ## 🚀 Quick Start Guide
 
 ### 1. Flash to ESP32 (1-Click Deployment)
-Connect your ESP32 to your PC via USB and run:
-```bash
-python deploy.py
-```
-*The script will auto-detect your ESP32's COM port, upload all `app/`, `www/`, and runtime files, and soft-reboot the board.*
+Connect your ESP32 to your PC via USB:
+- **On Windows**: Simply double-click **`install.bat`**!
+- **Or via Terminal (Windows/Mac/Linux)**:
+  ```bash
+  python tools/deploy.py
+  ```
+*The script will auto-detect your ESP32's serial port, upload all `app/`, `www/`, and runtime files, and soft-reboot the board.*
 
 ### 2. Connect & Open the Web App
 1. On your phone, tablet, or laptop, connect to the Wi-Fi network:  

@@ -2,6 +2,7 @@
 One-Click Deployment Tool for ESP32 File Transfer Tool
 Automatically detects connected ESP32, syncs all project files and directories,
 and soft-reboots the device in seconds using MicroPython Raw REPL.
+Supports standalone executable builds (PyInstaller) and direct script execution.
 """
 
 import os
@@ -13,7 +14,20 @@ try:
     import serial.tools.list_ports
 except ImportError:
     print("Error: 'pyserial' is required. Run: pip install pyserial")
+    input("\nPress Enter to exit...")
     sys.exit(1)
+
+
+def get_base_dir():
+    """Resolve project root directory for regular execution and PyInstaller bundles."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    # If this script is in tools/, the project root is one level up
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.abspath(os.path.join(script_dir, ".."))
+    if os.path.exists(os.path.join(parent_dir, "app")):
+        return parent_dir
+    return script_dir
 
 
 def find_esp32_port():
@@ -24,7 +38,7 @@ def find_esp32_port():
         if any(chip in desc for chip in ["cp210", "ch340", "ch9102", "ftdi", "usb to uart", "esp32"]):
             return p.device
 
-    # Fallback to first available port if only one exists
+    # Fallback to first available non-standard port
     available = [p.device for p in ports if "com1" not in p.device.lower()]
     if available:
         return available[0]
@@ -53,17 +67,14 @@ class RawReplUploader:
             return False
 
     def _enter_raw_repl(self):
-        # Send Ctrl-C twice to break out of running loops
         self.ser.write(b"\r\x03\x03")
         time.sleep(0.2)
         self.ser.reset_input_buffer()
 
-        # Send Ctrl-A to enter raw REPL
         self.ser.write(b"\x01")
         time.sleep(0.2)
         resp = self.ser.read_all()
         if b"raw REPL" not in resp:
-            # Try again once
             self.ser.write(b"\r\x03\x01")
             time.sleep(0.3)
             resp = self.ser.read_all()
@@ -72,8 +83,7 @@ class RawReplUploader:
         """Execute a Python command block in raw REPL."""
         cmd_bytes = cmd_str.encode("utf-8") + b"\x04"
         self.ser.write(cmd_bytes)
-        
-        # Read response up to OK followed by output
+
         resp = b""
         start = time.time()
         while time.time() - start < 5:
@@ -100,14 +110,11 @@ class RawReplUploader:
         with open(local_path, "rb") as f:
             content = f.read()
 
-        # Open file on ESP32
         self.execute("f = open('{}', 'wb')".format(remote_path))
 
-        # Stream in 256-byte binary chunks
         chunk_size = 256
         for i in range(0, len(content), chunk_size):
             chunk = content[i:i + chunk_size]
-            # Write chunk representation
             self.execute("f.write({})".format(repr(chunk)))
 
         self.execute("f.close()")
@@ -115,19 +122,20 @@ class RawReplUploader:
     def reboot(self):
         """Exit raw REPL and soft reboot."""
         if self.ser:
-            # Ctrl-B to exit raw REPL and reboot
             self.ser.write(b"\x02")
             self.ser.close()
 
 
 def deploy():
-    print("=" * 50)
-    print("   ESP32 File Transfer Tool - 1-Click Installer")
-    print("=" * 50)
+    print("=" * 52)
+    print("     ESP32 File Transfer Tool - 1-Click Installer")
+    print("=" * 52)
 
     port = find_esp32_port()
     if not port:
-        print("\n[!] No ESP32 detected. Check USB data cable connection.")
+        print("\n[!] No ESP32 detected.")
+        print("    Please connect your ESP32 with a USB data cable and try again.")
+        input("\nPress Enter to exit...")
         return
 
     print("Found ESP32 on port: {}".format(port))
@@ -135,40 +143,53 @@ def deploy():
 
     print("Connecting to ESP32...")
     if not uploader.connect():
+        input("\nPress Enter to exit...")
         return
 
-    # Files and folders to upload
+    base_dir = get_base_dir()
+
+    # Files to sync: (relative path from base_dir, target path on ESP32)
     files_to_sync = [
         ("boot.py", "boot.py"),
         ("main.py", "main.py"),
-        ("config.json", "config.json"),
-        ("www/index.html", "www/index.html"),
-        ("app/__init__.py", "app/__init__.py"),
-        ("app/config.py", "app/config.py"),
-        ("app/wifi.py", "app/wifi.py"),
-        ("app/storage.py", "app/storage.py"),
-        ("app/server.py", "app/server.py"),
+        ("config.example.json", "config.json"),
+        (os.path.join("www", "index.html"), "www/index.html"),
+        (os.path.join("app", "__init__.py"), "app/__init__.py"),
+        (os.path.join("app", "config.py"), "app/config.py"),
+        (os.path.join("app", "wifi.py"), "app/wifi.py"),
+        (os.path.join("app", "storage.py"), "app/storage.py"),
+        (os.path.join("app", "server.py"), "app/server.py"),
     ]
 
-    # Directories to ensure exist
     dirs_to_create = ["app", "www"]
     for d in dirs_to_create:
         uploader.make_remote_dir(d)
 
     total = len(files_to_sync)
-    for idx, (local, remote) in enumerate(files_to_sync, start=1):
-        if not os.path.exists(local):
-            continue
-        size = os.path.getsize(local)
-        print("[{}/{}] Syncing {} ({} bytes)...".format(idx, total, remote, size))
-        uploader.upload_file(local, remote)
+    for idx, (rel_local, remote) in enumerate(files_to_sync, start=1):
+        local_full = os.path.join(base_dir, rel_local)
+        if not os.path.exists(local_full):
+            if rel_local == "config.example.json":
+                local_full = os.path.join(base_dir, "config.json")
+            if not os.path.exists(local_full):
+                print("[!] Warning: Skipped '{}' (file not found)".format(rel_local))
+                continue
 
-    print("\n[OK] All files successfully deployed!")
+        size = os.path.getsize(local_full)
+        print("[{}/{}] Syncing {} ({} bytes)...".format(idx, total, remote, size))
+        uploader.upload_file(local_full, remote)
+
+    print("\n" + "=" * 52)
+    print(" [OK] All files successfully deployed!")
+    print("=" * 52)
     print("Rebooting ESP32...")
     uploader.reboot()
-    print("ESP32 is online! Connect to Wi-Fi 'ESP32-FileTransfer' and visit http://192.168.4.1/")
+    print("\nYour ESP32 is ready!")
+    print("1. Connect to Wi-Fi: 'ESP32-FileTransfer'")
+    print("2. Open your browser: http://192.168.4.1/")
+    print("=" * 52)
+    input("\nPress Enter to exit...")
 
 
 if __name__ == "__main__":
     deploy()
-

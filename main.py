@@ -22,7 +22,11 @@ def main():
     net_status = wifi.connect()
 
     # 3. Launch HTTP web server
-    server = WebServer(config, ip_address=net_status["ip"])
+    server = WebServer(
+        config,
+        ip_address=net_status["ip"],
+        hostname=net_status.get("hostname", "esp32")
+    )
     server.start()
 
 

@@ -9,6 +9,7 @@ DEFAULT_CONFIG_PATH = "config.json"
 
 DEFAULT_CONFIG = {
     "wifi": {
+        "hostname": "esp32",
         "sta_ssid": "",
         "sta_password": "",
         "ap_ssid": "ESP32-FileTransfer",

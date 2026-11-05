@@ -11,17 +11,19 @@ import os
 import time
 
 from app.storage import StorageManager
+from app.dns import DNSServer
 
 
 class WebServer:
     """Production-grade embedded HTTP server with streaming I/O and REST API."""
 
-    def __init__(self, config, ip_address="0.0.0.0"):
+    def __init__(self, config, ip_address="0.0.0.0", hostname="esp32"):
         srv_cfg = config.get("server", {})
         self.port = srv_cfg.get("port", 80)
         self.chunk_size = srv_cfg.get("chunk_size", 1024)
         self.static_dir = srv_cfg.get("static_dir", "www")
         self.ip_address = ip_address
+        self.hostname = hostname
         self.running = False
 
     def start(self):
@@ -29,13 +31,23 @@ class WebServer:
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+        dns = DNSServer(ip_address=self.ip_address, port=53)
+        dns.start()
+
         try:
             server_sock.bind(("0.0.0.0", self.port))
             server_sock.listen(5)
+            # Use small timeout on accept so DNS loop remains responsive
+            server_sock.settimeout(0.2)
             self.running = True
-            print("[Server] Listening at http://{}:{}/".format(self.ip_address, self.port))
+            print("[Server] Listening at http://{}:{}/ (or http://{}/, http://{}.local/)".format(
+                self.ip_address, self.port, self.hostname, self.hostname
+            ))
 
             while self.running:
+                # Service any pending DNS queries
+                dns.process()
+
                 try:
                     client_sock, client_addr = server_sock.accept()
                     client_sock.settimeout(5.0)
@@ -51,6 +63,7 @@ class WebServer:
 
                     client_sock.close()
                 except OSError:
+                    # Timeout on accept, loop continues to service DNS
                     pass
                 except Exception as e:
                     print("[Server] Request error: {}".format(e))
@@ -60,6 +73,7 @@ class WebServer:
         except Exception as e:
             print("[Server] Fatal error: {}".format(e))
         finally:
+            dns.stop()
             server_sock.close()
             self.running = False
             print("[Server] Stopped.")
@@ -85,6 +99,17 @@ class WebServer:
             path, query_str = url.split("?", 1)
         else:
             path, query_str = url, ""
+
+        # Handle Windows / Android connectivity probes silently to stop log spam
+        if path == "/connecttest.txt":
+            self._send_response(client, 200, "text/plain", b"Microsoft Connect Test")
+            return
+        elif path in ("/generate_204", "/gen_204"):
+            self._send_response(client, 204, "text/plain", b"")
+            return
+        elif path == "/favicon.ico":
+            self._send_response(client, 204, "image/x-icon", b"")
+            return
 
         query_params = self._parse_query_string(query_str)
         print("[HTTP] {} {}".format(method, path))

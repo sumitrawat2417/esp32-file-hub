@@ -157,6 +157,7 @@ def deploy():
         (os.path.join("app", "__init__.py"), "app/__init__.py"),
         (os.path.join("app", "config.py"), "app/config.py"),
         (os.path.join("app", "wifi.py"), "app/wifi.py"),
+        (os.path.join("app", "dns.py"), "app/dns.py"),
         (os.path.join("app", "storage.py"), "app/storage.py"),
         (os.path.join("app", "server.py"), "app/server.py"),
     ]

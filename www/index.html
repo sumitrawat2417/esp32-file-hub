@@ -521,7 +521,8 @@
     };
 
     window.onload = function() {
-      document.getElementById('badgeIp').innerText = window.location.hostname || '192.168.4.1';
+      const host = window.location.hostname || '192.168.4.1';
+      document.getElementById('badgeIp').innerText = host.includes('.local') ? host : host + ' • esp32.local';
       loadStorageMetrics();
       navigateTo('/');
     };

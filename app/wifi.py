@@ -12,16 +12,28 @@ class WiFiManager:
 
     def __init__(self, config):
         wifi_cfg = config.get("wifi", {})
+        self.hostname = wifi_cfg.get("hostname", "esp32").strip() or "esp32"
         self.sta_ssid = wifi_cfg.get("sta_ssid", "").strip()
         self.sta_password = wifi_cfg.get("sta_password", "")
         self.ap_ssid = wifi_cfg.get("ap_ssid", "ESP32-FileTransfer").strip()
         self.ap_password = wifi_cfg.get("ap_password", "")
         self.timeout_s = wifi_cfg.get("connect_timeout_s", 15)
 
+        # Set network hostname and mDNS broadcast before activating interfaces
+        self._configure_hostname(self.hostname)
+
         self.sta = network.WLAN(network.STA_IF)
         self.ap = network.WLAN(network.AP_IF)
         self.active_mode = None
         self.ip_address = "0.0.0.0"
+
+    def _configure_hostname(self, name):
+        """Configure global hostname and mDNS broadcast before interface activation."""
+        try:
+            network.hostname(name)
+            print("[WiFi] Hostname set to '{}' (accessible at http://{}.local/)".format(name, name))
+        except (AttributeError, TypeError) as e:
+            print("[WiFi] Note: network.hostname() not supported on this firmware build ({})".format(e))
 
     def connect(self):
         """
@@ -80,6 +92,8 @@ class WiFiManager:
         return {
             "mode": self.active_mode,
             "ip": self.ip_address,
+            "hostname": self.hostname,
+            "mdns_url": "http://{}.local/".format(self.hostname),
             "ssid": self.sta_ssid if self.active_mode == "STA" else self.ap_ssid
         }
 

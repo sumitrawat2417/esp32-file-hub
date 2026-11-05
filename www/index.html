@@ -250,6 +250,108 @@
     .modal-desc { font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem; }
     .modal-actions { display: flex; justify-content: center; gap: 0.75rem; }
 
+    /* Code & File Viewer Modal */
+    .viewer-modal {
+      max-width: 960px;
+      width: 95vw;
+      height: 85vh;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      padding: 0;
+      overflow: hidden;
+    }
+    .viewer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(15, 23, 42, 0.6);
+      flex-shrink: 0;
+    }
+    .viewer-title-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      overflow: hidden;
+    }
+    .viewer-filename {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      max-width: 320px;
+    }
+    .viewer-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(30, 58, 95, 0.5);
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .viewer-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+    .viewer-body {
+      flex: 1;
+      overflow: auto;
+      background: #070d18;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84rem;
+      line-height: 1.55;
+      padding: 0.5rem 0;
+    }
+    .viewer-line {
+      display: flex;
+      min-height: 1.35rem;
+    }
+    .viewer-line:hover {
+      background: rgba(30, 58, 95, 0.25);
+    }
+    .viewer-line-num {
+      width: 52px;
+      text-align: right;
+      padding-right: 14px;
+      color: #475569;
+      user-select: none;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(30, 58, 95, 0.4);
+    }
+    .viewer-line-text {
+      padding-left: 14px;
+      white-space: pre;
+      color: #e2e8f0;
+      flex: 1;
+    }
+    .viewer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 1.25rem;
+      border-top: 1px solid var(--card-border);
+      background: rgba(15, 23, 42, 0.6);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .file-view-link {
+      cursor: pointer;
+      color: var(--text);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .file-view-link:hover {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+
     @media (max-width: 600px) {
       .storage-grid { grid-template-columns: 1fr; }
       header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
@@ -355,7 +457,30 @@
     </div>
   </div>
 
-  <div class="toast-container" id="toastContainer"></div>
+  <!-- File Viewer Modal -->
+  <div class="modal-backdrop" id="viewerModal" onclick="onViewerBackdropClick(event)">
+    <div class="modal viewer-modal" onclick="event.stopPropagation()">
+      <div class="viewer-header">
+        <div class="viewer-title-group">
+          <span style="font-size:1.2rem;">📄</span>
+          <span class="viewer-filename" id="viewerFilename">file.py</span>
+          <span class="viewer-meta" id="viewerMeta">-</span>
+        </div>
+        <div class="viewer-controls">
+          <button class="btn btn-sm btn-secondary" id="btnCopyViewer" onclick="copyViewerContent()">📋 Copy</button>
+          <a class="btn btn-sm btn-secondary" id="btnDownloadViewer" href="#" download>⬇ Download</a>
+          <button class="btn btn-sm btn-secondary" onclick="closeViewer()" style="font-size:1rem; padding:0.25rem 0.6rem;">✕</button>
+        </div>
+      </div>
+      <div class="viewer-body" id="viewerBody">
+        <div id="viewerLinesContainer"></div>
+      </div>
+      <div class="viewer-footer">
+        <span id="viewerPathFooter" style="font-family:monospace;">/</span>
+        <button class="btn btn-sm btn-secondary" onclick="closeViewer()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     let currentDir = '/';
@@ -477,13 +602,19 @@
             const icon = getFileIcon(item.name, item.is_dir);
             const size = item.is_dir ? '-' : formatBytes(item.size);
 
+            const isText = isViewable(item.name);
             const nameHtml = item.is_dir
               ? `<a class="folder-link" onclick="navigateTo('${itemPath}')">${item.name}</a>`
-              : `<span>${item.name}</span>`;
+              : (isText
+                  ? `<a class="file-view-link" onclick="viewFile('${itemPath}', '${item.name}', ${item.size})" title="View file">${item.name}</a>`
+                  : `<span>${item.name}</span>`);
 
             let actions = '<div class="actions-cell">';
             if (!item.is_dir) {
-              actions += `<a href="/api/download?path=${encodeURIComponent(itemPath)}" class="btn btn-sm">⬇ Download</a>`;
+              if (isText) {
+                actions += `<button onclick="viewFile('${itemPath}', '${item.name}', ${item.size})" class="btn btn-sm btn-secondary" title="View file">👁 View</button>`;
+              }
+              actions += `<a href="/api/download?path=${encodeURIComponent(itemPath)}" class="btn btn-sm" download="${item.name}">⬇ Download</a>`;
             }
             actions += `<button onclick="deleteResource('${itemPath}')" class="btn btn-sm btn-danger">🗑 Delete</button>`;
             actions += '</div>';
@@ -541,6 +672,136 @@
         showToast('Connection error', 'error');
       }
     }
+
+    function isViewable(filename) {
+      const exts = ['.py', '.json', '.txt', '.csv', '.log', '.ini', '.conf', '.md', '.html', '.css', '.js', '.sh', '.bat', '.env', '.yaml', '.yml', '.xml', '.toml'];
+      const lower = (filename || '').toLowerCase();
+      if (['boot.py', 'main.py', 'config.json', '.gitignore', 'license', 'readme'].includes(lower)) return true;
+      return exts.some(ext => lower.endsWith(ext));
+    }
+
+    let currentViewerText = '';
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function viewFile(path, name, size) {
+      const modal = document.getElementById('viewerModal');
+      const filenameEl = document.getElementById('viewerFilename');
+      const metaEl = document.getElementById('viewerMeta');
+      const pathFooter = document.getElementById('viewerPathFooter');
+      const downloadLink = document.getElementById('btnDownloadViewer');
+      const container = document.getElementById('viewerLinesContainer');
+
+      filenameEl.innerText = name;
+      pathFooter.innerText = `Path: ${path}`;
+      metaEl.innerText = formatBytes(size);
+      downloadLink.href = `/api/download?path=${encodeURIComponent(path)}`;
+      downloadLink.setAttribute('download', name);
+      container.innerHTML = '<div style="padding:2.5rem; text-align:center; color:var(--text-muted);">Loading file contents from ESP32...</div>';
+
+      modal.style.display = 'flex';
+
+      try {
+        const res = await fetch(`/api/download?path=${encodeURIComponent(path)}`);
+        if (!res.ok) {
+          container.innerHTML = '<div style="padding:2.5rem; text-align:center; color:var(--danger);">Failed to load file contents</div>';
+          return;
+        }
+        const text = await res.text();
+        currentViewerText = text;
+
+        const lines = text.split('\n');
+        metaEl.innerText = `${formatBytes(size)} • ${lines.length} line${lines.length === 1 ? '' : 's'}`;
+
+        let html = '';
+        const maxLines = 4000;
+        const renderCount = Math.min(lines.length, maxLines);
+
+        for (let i = 0; i < renderCount; i++) {
+          const lineNum = i + 1;
+          const lineText = escapeHtml(lines[i]);
+          html += `<div class="viewer-line"><span class="viewer-line-num">${lineNum}</span><span class="viewer-line-text">${lineText || '&nbsp;'}</span></div>`;
+        }
+
+        if (lines.length > maxLines) {
+          html += `<div style="padding:0.9rem; color:var(--warning); text-align:center; background:rgba(234,179,8,0.1); font-size:0.8rem;">⚠️ Showing first ${maxLines} lines. Download file to view complete contents.</div>`;
+        }
+
+        container.innerHTML = html || '<div style="padding:2.5rem; text-align:center; color:var(--text-muted); font-style:italic;">(Empty file)</div>';
+      } catch (err) {
+        container.innerHTML = `<div style="padding:2.5rem; text-align:center; color:var(--danger);">Error reading file: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function closeViewer() {
+      const modal = document.getElementById('viewerModal');
+      if (modal) modal.style.display = 'none';
+      currentViewerText = '';
+    }
+
+    function onViewerBackdropClick(e) {
+      if (e.target.id === 'viewerModal') {
+        closeViewer();
+      }
+    }
+
+    async function copyViewerContent() {
+      if (!currentViewerText) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(currentViewerText);
+          } catch (_) {
+            fallbackCopy(currentViewerText);
+          }
+        } else {
+          fallbackCopy(currentViewerText);
+        }
+
+        const btn = document.getElementById('btnCopyViewer');
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '✓ Copied!';
+        btn.style.borderColor = 'var(--success)';
+        btn.style.color = 'var(--success)';
+        setTimeout(() => {
+          btn.innerHTML = oldText;
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }, 2000);
+        showToast('Copied to clipboard', 'success');
+      } catch (err) {
+        showToast('Failed to copy', 'error');
+      }
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeViewer();
+        const conflictModal = document.getElementById('conflictModal');
+        if (conflictModal && conflictModal.style.display === 'flex') {
+          conflictModal.style.display = 'none';
+        }
+      }
+    });
 
     function computePureJsSha256(bytes) {
       function rightRotate(value, amount) {

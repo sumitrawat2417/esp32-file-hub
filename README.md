@@ -434,8 +434,12 @@ This project is released under the [MIT License](LICENSE).
 
 <div align="center">
 
+If this saved you time, a star helps others find it.
+
 **Designed and developed by [Forbit](https://github.com/sumitrawat2417) (Sumit Rawat)**
 
-[GitHub](https://github.com/sumitrawat2417)
+[Report a Bug](https://github.com/sumitrawat2417/esp32-file-hub/issues) · [Request a Feature](https://github.com/sumitrawat2417/esp32-file-hub/issues)
+
+<sub>ESP32 is a trademark of Espressif Systems (Shanghai) Co., Ltd. This project is not affiliated with, endorsed by, or connected to Espressif.</sub>
 
 </div>

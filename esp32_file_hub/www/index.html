@@ -1109,12 +1109,12 @@
       <div id="conflictReason" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:1.25rem;"></div>
       <div style="display:flex; flex-direction:column; gap:0.5rem;">
         <div style="display:flex; gap:0.5rem; justify-content:center;">
-          <button type="button" class="btn btn-sm btn-secondary" id="btnCancelConflict" onclick="confirmOverwrite(null, 'skip')">Skip</button>
-          <button type="button" class="btn btn-sm btn-primary" id="btnOverwriteConflict" onclick="confirmOverwrite(null, 'replace')">Replace</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="btnCancelConflict" onclick="resolveConflictChoice('skip')">Skip</button>
+          <button type="button" class="btn btn-sm btn-primary" id="btnOverwriteConflict" onclick="resolveConflictChoice('replace')">Replace</button>
         </div>
         <div style="display:flex; gap:0.5rem; justify-content:center;">
-          <button type="button" class="btn btn-sm btn-secondary" id="btnSkipAllConflict" onclick="confirmOverwrite(null, 'skip-all')">Skip All</button>
-          <button type="button" class="btn btn-sm btn-secondary" id="btnOverwriteAllConflict" onclick="confirmOverwrite(null, 'replace-all')" style="border-color:rgba(56, 189, 248, 0.3);">Replace All</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="btnSkipAllConflict" onclick="resolveConflictChoice('skip-all')">Skip All</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="btnOverwriteAllConflict" onclick="resolveConflictChoice('replace-all')" style="border-color:rgba(56, 189, 248, 0.3);">Replace All</button>
         </div>
       </div>
     </div>
@@ -1900,7 +1900,7 @@
       return files;
     }
 
-    function confirmOverwrite(filename, details, isBatch = false) {
+    function showConflictModal(filename, details, isBatch = false) {
       return new Promise(resolve => {
         const modal = document.getElementById('conflictModal');
         const fnEl = document.getElementById('conflictFilename');
@@ -1913,7 +1913,7 @@
 
         fnEl.textContent = filename;
         descEl.innerHTML = `A file named <strong style="color:var(--primary);">${escapeHtml(filename)}</strong> already exists in this folder.`;
-        existSizeEl.textContent = formatBytes(details.remoteSize);
+        existSizeEl.textContent = details.remoteSize ? formatBytes(details.remoteSize) : 'Existing';
         inSizeEl.textContent = formatBytes(details.localSize);
 
         if (details.isHashIdentical) {
@@ -1934,13 +1934,11 @@
       });
     }
 
-    // Connect button click for modal
-    const origConfirm = window.confirmOverwrite;
-    window.confirmOverwrite = (fn, action) => {
+    function resolveConflictChoice(action) {
       if (window._resolveConflict) {
         window._resolveConflict(action);
       }
-    };
+    }
 
     async function handleFileSelect(input) {
       let fileList = [];
@@ -1987,17 +1985,19 @@
         let shouldOverwrite = false;
         let remoteSize = null;
         let remoteHash = null;
+        let fileExists = false;
 
         try {
           const checkRes = await fetch(`/api/hash?path=${encodeURIComponent(dest)}`);
           if (checkRes.ok) {
             const hData = await checkRes.json();
-            remoteHash = (hData.hash || '').toLowerCase();
+            fileExists = true;
+            remoteHash = (hData.sha256 || hData.hash || '').toLowerCase();
             remoteSize = hData.size !== undefined ? Number(hData.size) : null;
           }
         } catch (e) {}
 
-        if (remoteHash !== null) {
+        if (fileExists) {
           if (batchAction === 'skip-all') {
             skippedCount++;
             continue;
@@ -2005,8 +2005,11 @@
           if (batchAction === 'replace-all') {
             shouldOverwrite = true;
           } else {
-            const localHash = (await calculateFileSha256(file)).toLowerCase();
-            const isIdentical = localHash && remoteHash && localHash === remoteHash;
+            let isIdentical = false;
+            if (remoteHash) {
+              const localHash = (await calculateFileSha256(file)).toLowerCase();
+              isIdentical = (localHash && localHash === remoteHash);
+            }
 
             if (isIdentical) {
               showToast(`Skipped identical: ${file.name}`, 'info');
@@ -2014,7 +2017,7 @@
               continue;
             }
 
-            const choice = await confirmOverwrite(relPath, {
+            const choice = await showConflictModal(relPath, {
               remoteSize: remoteSize || 0,
               localSize: file.size,
               isHashIdentical: isIdentical
@@ -2032,6 +2035,10 @@
               shouldOverwrite = true;
             } else if (choice === 'replace') {
               shouldOverwrite = true;
+            } else {
+              // User cancelled or closed modal
+              skippedCount++;
+              continue;
             }
           }
         }

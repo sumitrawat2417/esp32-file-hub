@@ -293,8 +293,12 @@ class WebServer:
             return
 
         digest = StorageManager.compute_sha256(target)
+        try:
+            file_size = os.stat(target)[6]
+        except Exception:
+            file_size = 0
         if digest:
-            self._send_json(client, {"path": target, "sha256": digest})
+            self._send_json(client, {"path": target, "sha256": digest, "size": file_size})
         else:
             self._send_error(client, 500, "Failed to compute checksum")
 
@@ -384,6 +388,17 @@ class WebServer:
         allow_overwrite = query_params.get("overwrite", "false").lower() == "true"
 
         if not allow_overwrite and StorageManager.exists(target):
+            # Drain body bytes to prevent client-side TCP connection reset (ERR_CONNECTION_RESET)
+            try:
+                cl = int(headers.get("content-length", 0))
+                rem = max(0, cl - len(initial_body))
+                while rem > 0:
+                    chunk = client.recv(min(512, rem))
+                    if not chunk:
+                        break
+                    rem -= len(chunk)
+            except Exception:
+                pass
             self._send_error(client, 409, "File '{}' already exists".format(target))
             return
 

@@ -15,7 +15,7 @@ class WiFiManager:
         self.hostname = wifi_cfg.get("hostname", "esp32").strip() or "esp32"
         self.sta_ssid = wifi_cfg.get("sta_ssid", "").strip()
         self.sta_password = wifi_cfg.get("sta_password", "")
-        self.ap_ssid = wifi_cfg.get("ap_ssid", "ESP32-FileTransfer").strip()
+        self.ap_ssid = wifi_cfg.get("ap_ssid", "ESP32-FileHub").strip()
         self.ap_password = wifi_cfg.get("ap_password", "")
         self.timeout_s = wifi_cfg.get("connect_timeout_s", 15)
 
@@ -53,7 +53,7 @@ class WiFiManager:
                 print("\n" + "-" * 52)
                 print("Select Wi-Fi Operation Mode:")
                 print("  [1] Connect to Mobile Hotspot / Wi-Fi (Stay on PC network)")
-                print("  [2] Standalone Access Point (ESP32-FileTransfer AP)")
+                print("  [2] Standalone Access Point (ESP32-FileHub AP)")
                 print("-" * 52)
                 try:
                     choice = input("Enter choice [1 or 2, default: 2]: ").strip()
@@ -192,9 +192,12 @@ class WiFiManager:
                             from .config import ConfigManager
                         except (ImportError, ValueError):
                             try:
-                                from esp32_transfer.config import ConfigManager
+                                from esp32_file_hub.config import ConfigManager
                             except (ImportError, ValueError):
-                                from config import ConfigManager
+                                try:
+                                    from esp32_transfer.config import ConfigManager
+                                except (ImportError, ValueError):
+                                    from config import ConfigManager
 
                         cfg = ConfigManager.load()
                         if "wifi" not in cfg:

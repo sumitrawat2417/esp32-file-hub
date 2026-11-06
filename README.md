@@ -1,14 +1,14 @@
 <div align="center">
 
-# ESP32 File Transfer Tool
+# ESP32 File Hub
 
-**A browser-based file manager that runs on an ESP32 with MicroPython, so you can browse, upload, download, view, and delete files over Wi-Fi without a USB cable.**
+**A lightweight, standalone wireless file manager & modern Web UI that runs directly on an ESP32 with MicroPython. Browse, upload, download, view, and organize files over Wi-Fi without a USB cable.**
 
-[![License](https://img.shields.io/github/license/sumitrawat2417/esp32-transfer)](LICENSE)
+[![License](https://img.shields.io/github/license/sumitrawat2417/esp32-file-hub)](LICENSE)
 [![MicroPython](https://img.shields.io/badge/MicroPython-v1.19%2B-blue)](https://micropython.org/)
 [![Hardware](https://img.shields.io/badge/Hardware-ESP32-green)](https://www.espressif.com/en/products/socs/esp32)
 
-[Report a Bug](https://github.com/sumitrawat2417/esp32-transfer/issues) · [Request a Feature](https://github.com/sumitrawat2417/esp32-transfer/issues)
+[Report a Bug](https://github.com/sumitrawat2417/esp32-file-hub/issues) · [Request a Feature](https://github.com/sumitrawat2417/esp32-file-hub/issues)
 
 </div>
 
@@ -16,11 +16,11 @@
 
 ## Overview
 
-**ESP32 File Transfer Tool** is a MicroPython package that runs a web-based file manager directly on an ESP32, for anyone who needs to manage the files on a MicroPython board: scripts, JSON configuration, web assets, and logs.
+**ESP32 File Hub** is a MicroPython package that turns your ESP32 into a self-hosted micro-NAS and web-based file management hub: manage scripts, configuration files, web assets, and logs from any phone, tablet, or laptop.
 
-**The problem:** Moving files on and off a MicroPython board normally means a USB cable and a desktop tool such as Thonny. That is inconvenient when the board sits in an enclosure or is deployed away from your desk.
+**The problem:** Moving files on and off a MicroPython board normally requires a USB cable and a desktop IDE like Thonny. That is inconvenient when the board is mounted in an enclosure, placed in a remote setup, or deployed away from your workstation.
 
-**The approach:** The board serves its own single-page web interface over HTTP. It either joins an existing 2.4 GHz Wi-Fi network (Station mode) or hosts its own network (Access Point mode), so a browser on a PC, phone, or tablet can manage the flash filesystem. All runtime code lives in a single directory, `/esp32_transfer`, which keeps the board's root free for your own files. The interface has no external CDN, font, or script dependencies, so it works with no internet access. USB is needed only once, to install the package.
+**The approach:** The board serves its own dark-glassmorphism single-page web interface over HTTP. It either joins an existing 2.4 GHz Wi-Fi network (Station mode) or hosts its own hotspot (Access Point mode), letting any modern browser manage the flash filesystem. All runtime code lives in a single directory, `/esp32_file_hub`, keeping the board's root clean for your own files. The interface has zero external CDN or cloud dependencies, working 100% offline. USB is needed only once, to install the package.
 
 ## Features
 
@@ -37,7 +37,7 @@
 
 **Networking**
 
-- **Two Wi-Fi modes:** Station mode joins your router or phone hotspot. Access Point mode creates the `ESP32-FileTransfer` network.
+- **Two Wi-Fi modes:** Station mode joins your router or phone hotspot. Access Point mode creates the `ESP32-FileHub` network.
 - **Wi-Fi setup without USB:** Change the network from the web interface, or run the interactive terminal wizard, which scans for networks and lists them by signal strength.
 - **Name resolution:** Sets the board hostname (default `esp32`) and runs a small DNS responder on UDP port 53 that answers every query with the board's IP address.
 - **Quiet connectivity probes:** Answers the Windows and Android captive-portal checks (`/connecttest.txt`, `/generate_204`) and `/favicon.ico` without log noise.
@@ -70,7 +70,7 @@ The project targets a standard ESP32 development board with an onboard USB-to-UA
 
 ```mermaid
 flowchart LR
-    Browser["Client Browser (PC, Phone, Tablet)"] <-->|"Wi-Fi: HTTP 80, DNS 53"| ESP["ESP32 (MicroPython + esp32_transfer)"]
+    Browser["Client Browser (PC, Phone, Tablet)"] <-->|"Wi-Fi: HTTP 80, DNS 53"| ESP["ESP32 (MicroPython + esp32_file_hub)"]
     ESP <-->|"os module"| Flash[("On-board Flash Filesystem")]
     PC["Host PC (tools/deploy.py)"] <-->|"USB Serial (Raw REPL)"| ESP
 ```
@@ -94,7 +94,7 @@ On boot, `start()` loads the configuration, brings up Wi-Fi, and then enters a s
 
 ```mermaid
 flowchart TD
-    A["esp32_transfer.start()"] --> B["Load config.json and defaults"]
+    A["esp32_file_hub.start()"] --> B["Load config.json and defaults"]
     B --> C{"sta_ssid configured in settings"}
     C -->|Yes| D["Try Station mode for 15s"]
     C -->|No| F["REPL Prompt: Mode Selection"]
@@ -157,8 +157,8 @@ Connect the board over USB and double-click `install.bat` in the repository root
 **Option 2: Command line (Windows, macOS, Linux)**
 
 ```bash
-git clone https://github.com/sumitrawat2417/esp32-transfer.git
-cd esp32-transfer
+git clone https://github.com/sumitrawat2417/esp32-file-hub.git
+cd esp32-file-hub
 python tools/deploy.py
 ```
 
@@ -166,10 +166,10 @@ The installer:
 
 1. Detects the serial port by matching the port description against `cp210`, `ch340`, `ch9102`, `ftdi`, `usb to uart`, and `esp32`. If none match, it uses the first port that is not `COM1`.
 2. Opens the MicroPython raw REPL.
-3. Removes the legacy files listed above.
-4. Creates `/esp32_transfer` and `/esp32_transfer/www`.
-5. Reads SHA-256 hashes of the 10 package files already on the board and uploads only the ones that differ.
-6. Keeps an existing `esp32_transfer/config.json` so saved Wi-Fi credentials survive re-installs.
+3. Removes legacy files and directories (`esp32_transfer`, `lib/`, `app/`, `www/`).
+4. Creates `/esp32_file_hub` and `/esp32_file_hub/www`.
+5. Reads SHA-256 hashes of the package files already on the board and uploads only the ones that differ.
+6. Keeps an existing `esp32_file_hub/config.json` so saved Wi-Fi credentials survive re-installs.
 7. Leaves the raw REPL and closes the port.
 
 ### Start the server
@@ -179,17 +179,17 @@ The server does not start by itself after installation. Choose one way to start 
 **From the REPL** (115200 baud, using Thonny, PuTTY, or `mpremote`):
 
 ```python
-import esp32_transfer
-esp32_transfer.start()
+import esp32_file_hub
+esp32_file_hub.start()
 ```
 
-**From Thonny:** open `/esp32_transfer/app.py` from the MicroPython device (File, Open, MicroPython device) and press F5.
+**From Thonny:** open `/esp32_file_hub/app.py` from the MicroPython device (File, Open, MicroPython device) and press F5.
 
 **On every boot:** create a `main.py` on the board containing:
 
 ```python
-import esp32_transfer
-esp32_transfer.start()
+import esp32_file_hub
+esp32_file_hub.start()
 ```
 
 ### Verify it works
@@ -199,7 +199,7 @@ If no network is saved yet, the REPL first asks how the board should connect. Pr
 ```text
 Select Wi-Fi Operation Mode:
   [1] Connect to Mobile Hotspot / Wi-Fi (Stay on PC network)
-  [2] Standalone Access Point (ESP32-FileTransfer AP)
+  [2] Standalone Access Point (ESP32-FileHub AP)
 Enter choice [1 or 2, default: 2]:
 ```
 
@@ -207,16 +207,16 @@ The REPL then prints a banner like this one (abridged):
 
 ```text
 ====================================================
-        ESP32 File Transfer Tool v1.0.0
+           ESP32 File Hub v1.0.0
 ====================================================
 ...
 📡 MODE: STANDALONE ACCESS POINT (Host Mode)
-   Wi-Fi Name (SSID) : ESP32-FileTransfer
+   Wi-Fi Name (SSID) : ESP32-FileHub
    Board IP          : 192.168.4.1
    Web Address       : http://192.168.4.1/ or http://esp32.local/
 ```
 
-Join the `ESP32-FileTransfer` network (open by default) and browse to `http://192.168.4.1/`. You should see the storage meter and the root directory listing. In Station mode, the banner shows the assigned IP and `http://esp32.local/` instead.
+Join the `ESP32-FileHub` network (open by default) and browse to `http://192.168.4.1/`. You should see the storage meter and the root directory listing. In Station mode, the banner shows the assigned IP and `http://esp32.local/` instead.
 
 ### Troubleshooting
 
@@ -231,7 +231,7 @@ Join the `ESP32-FileTransfer` network (open by default) and browse to `http://19
 
 ### Configuration
 
-Settings live in `/esp32_transfer/config.json` on the board. Missing keys fall back to these defaults:
+Settings live in `/esp32_file_hub/config.json` on the board. Missing keys fall back to these defaults:
 
 ```json
 {
@@ -239,14 +239,14 @@ Settings live in `/esp32_transfer/config.json` on the board. Missing keys fall b
     "hostname": "esp32",
     "sta_ssid": "",
     "sta_password": "",
-    "ap_ssid": "ESP32-FileTransfer",
+    "ap_ssid": "ESP32-FileHub",
     "ap_password": "",
     "connect_timeout_s": 15
   },
   "server": {
     "port": 80,
     "chunk_size": 1024,
-    "static_dir": "esp32_transfer/www"
+    "static_dir": "esp32_file_hub/www"
   }
 }
 ```
@@ -256,12 +256,12 @@ Settings live in `/esp32_transfer/config.json` on the board. Missing keys fall b
 | `wifi.hostname` | string | `"esp32"` | Board hostname, set with `network.hostname()` (reachable as `http://esp32.local/` where supported) |
 | `wifi.sta_ssid` | string | `""` | 2.4 GHz network to join in Station mode |
 | `wifi.sta_password` | string | `""` | Password for that network, stored as plain text |
-| `wifi.ap_ssid` | string | `"ESP32-FileTransfer"` | Network name broadcast in Access Point mode |
+| `wifi.ap_ssid` | string | `"ESP32-FileHub"` | Network name broadcast in Access Point mode |
 | `wifi.ap_password` | string | `""` | Access Point password. Used (WPA2-PSK) only when it has at least 8 characters; otherwise the network is open |
 | `wifi.connect_timeout_s` | integer | `15` | Seconds to wait for Station mode before giving up |
 | `server.port` | integer | `80` | TCP port for the HTTP server |
 | `server.chunk_size` | integer | `1024` | Buffer size in bytes for network and flash streaming |
-| `server.static_dir` | string | `"esp32_transfer/www"` | Directory that contains `index.html` |
+| `server.static_dir` | string | `"esp32_file_hub/www"` | Directory that contains `index.html` |
 
 ## Usage
 
@@ -280,8 +280,8 @@ Settings live in `/esp32_transfer/config.json` on the board. Missing keys fall b
 **From the terminal:**
 
 ```python
-import esp32_transfer
-esp32_transfer.setup_wifi()
+import esp32_file_hub
+esp32_file_hub.setup_wifi()
 ```
 
 The wizard scans for networks, lists up to ten by signal strength, lets you rescan or type an SSID manually, and saves the credentials once the board connects.
@@ -326,8 +326,8 @@ Notes for API clients: every response closes the connection, uploads need a `Con
 ## Project Structure
 
 ```text
-esp32-transfer/
-├── esp32_transfer/            # Package copied to the ESP32
+esp32-file-hub/
+├── esp32_file_hub/            # Package copied to the ESP32
 │   ├── __init__.py            # Public API: start(), run(), setup_wifi(), main
 │   ├── app.py                 # Thonny F5 launcher
 │   ├── config.py              # ConfigManager: defaults and merging
@@ -338,10 +338,11 @@ esp32-transfer/
 │   ├── server.py              # WebServer: HTTP loop and REST routes
 │   ├── setup_wifi.py          # Terminal Wi-Fi wizard entry point
 │   └── www/
-│       └── index.html         # Single-page web interface
+│       └── index.html         # Single-page modern web interface
 ├── tools/
 │   ├── deploy.py              # Host-side differential installer (PySerial, raw REPL)
 │   └── build_installer.bat    # PyInstaller recipe for a standalone installer
+├── esp32_transfer.py          # Backward-compatibility import shim
 ├── install.bat                # One-click Windows launcher for deploy.py
 ├── LICENSE                    # MIT License
 └── README.md
@@ -349,10 +350,10 @@ esp32-transfer/
 
 ## Status and Known Limitations
 
-**Status:** Version 1.0.0 (the version printed by the app). There is no tagged release yet.
+**Status:** Version 1.0.0 (Latest).
 
 - **Tested on:** A standard ESP32 development board with a CP210x/CH340-class USB-UART bridge, on Windows. The exact board revision and MicroPython build were not recorded. Other boards, macOS, and Linux are not verified.
-- **No authentication:** Anyone who can reach the board can list, read, overwrite, and delete every file on it. That includes `esp32_transfer/config.json`, which holds the saved Wi-Fi password in plain text. The Access Point is open unless you set `wifi.ap_password`, and the API sends `Access-Control-Allow-Origin: *`. Use it on networks you trust.
+- **No authentication:** Anyone who can reach the board can list, read, overwrite, and delete every file on it. That includes `esp32_file_hub/config.json`, which holds the saved Wi-Fi password in plain text. The Access Point is open unless you set `wifi.ap_password`, and the API sends `Access-Control-Allow-Origin: *`. Use it on networks you trust.
 - **Prompt on first run and after a failed connection:** `start()` asks you to pick a Wi-Fi mode in the REPL when no network is saved or the saved one cannot be joined. It waits for your answer, so an unattended start cannot fall back to Access Point mode by itself.
 - **No automatic restart:** The installer removes `main.py` from the board. After a reset, including the reset triggered by saving Wi-Fi settings, the server runs again only if you add the start-on-boot `main.py`.
 - **Installer cleanup:** The installer deletes the legacy root files and folders listed under Getting Started.
@@ -370,7 +371,7 @@ esp32-transfer/
 - **Challenge:** `os.stat()` reports a size of 0 for directories on MicroPython, so folders showed no size.
   **What I did:** `StorageManager.get_dir_size()` walks each folder with `os.ilistdir()` and adds up file sizes. The cost is that listing a directory walks every subfolder, so very deep trees list more slowly.
 - **Challenge:** Early versions scattered loose scripts across the board's root, mixing them with users' own files.
-  **What I did:** Moved everything into the `esp32_transfer/` package and gave every module a three-step import fallback (relative, package, bare) so it runs as a package, from Thonny, or as a flat script. The cost is repeated `try`/`except` blocks in each module.
+  **What I did:** Moved everything into the `esp32_file_hub/` package and gave every module a three-step import fallback (relative, package, bare) so it runs as a package, from Thonny, or as a flat script. The cost is repeated `try`/`except` blocks in each module.
 - **Challenge:** Reading each request with a single `recv(1024)` truncated headers, which produced malformed requests.
   **What I did:** The server now reads 512-byte pieces until it finds the end of the headers, up to 4,096 bytes. Requests with larger headers are not supported.
 - **Challenge:** Re-flashing every file on each deploy wears flash and is slow over serial.
@@ -378,14 +379,14 @@ esp32-transfer/
 
 ## Contributing
 
-Bug reports, feature ideas, and pull requests are welcome. Please open an [issue](https://github.com/sumitrawat2417/esp32-transfer/issues) first for larger changes.
+Bug reports, feature ideas, and pull requests are welcome. Please open an [issue](https://github.com/sumitrawat2417/esp32-file-hub/issues) first for larger changes.
 
 1. Fork the repository and create a branch such as `feature/my-change`.
-2. Keep the on-board code dependency-free and small: nothing outside `esp32_transfer/` is needed at runtime, the web interface must work offline with no CDN, and file I/O should stay chunked with `gc.collect()` at sensible points.
+2. Keep the on-board code dependency-free and small: nothing outside `esp32_file_hub/` is needed at runtime, the web interface must work offline with no CDN, and file I/O should stay chunked with `gc.collect()` at sensible points.
 3. Check syntax before flashing:
 
    ```bash
-   python -m py_compile esp32_transfer/__init__.py esp32_transfer/app.py esp32_transfer/config.py esp32_transfer/dns.py esp32_transfer/server.py esp32_transfer/setup_wifi.py esp32_transfer/storage.py tools/deploy.py
+   python -m py_compile esp32_file_hub/__init__.py esp32_file_hub/app.py esp32_file_hub/config.py esp32_file_hub/dns.py esp32_file_hub/server.py esp32_file_hub/setup_wifi.py esp32_file_hub/storage.py tools/deploy.py
    ```
 
    `wifi.py` imports the MicroPython-only `network` module, so check it by reading it carefully.

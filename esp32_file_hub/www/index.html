@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 File Transfer</title>
+  <title>ESP32 File Hub</title>
   <style>
     :root {
       --bg: #090d16;
@@ -988,7 +988,7 @@
         </div>
         <div>
           <div class="brand-title">
-            ESP32 Transfer
+            ESP32 File Hub
             <span class="brand-badge">v1.0</span>
           </div>
         </div>
@@ -1190,7 +1190,7 @@
         </div>
 
         <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 0.65rem 0.75rem; font-size: 0.78rem; color: #bae6fd; margin-bottom: 0.5rem; line-height:1.4;">
-          💡 <strong>Safe Failover:</strong> If the network is unreachable, the board automatically falls back to <code>ESP32-FileTransfer</code> AP mode in 15 seconds.
+          💡 <strong>Safe Failover:</strong> If the network is unreachable, the board automatically falls back to <code>ESP32-FileHub</code> AP mode in 15 seconds.
         </div>
       </div>
       <div class="modal-footer" style="justify-content:space-between;">
@@ -2196,7 +2196,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ssid: '', password: '' })
         });
-        showToast('Resetting to AP Host mode. Reconnect to ESP32-FileTransfer.', 'info');
+        showToast('Resetting to AP Host mode. Reconnect to ESP32-FileHub.', 'info');
         closeWifiModal();
       } catch (e) {
         showToast('Command sent. Board is resetting.', 'info');

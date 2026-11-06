@@ -5,21 +5,21 @@ Handles application settings, defaults, schema validation, and persistence.
 
 import json
 
-DEFAULT_CONFIG_PATH = "esp32_transfer/config.json"
+DEFAULT_CONFIG_PATH = "esp32_file_hub/config.json"
 
 DEFAULT_CONFIG = {
     "wifi": {
         "hostname": "esp32",
         "sta_ssid": "",
         "sta_password": "",
-        "ap_ssid": "ESP32-FileTransfer",
+        "ap_ssid": "ESP32-FileHub",
         "ap_password": "",
         "connect_timeout_s": 15
     },
     "server": {
         "port": 80,
         "chunk_size": 1024,
-        "static_dir": "esp32_transfer/www"
+        "static_dir": "esp32_file_hub/www"
     }
 }
 
@@ -32,6 +32,8 @@ class ConfigManager:
         if filepath:
             return filepath
         candidates = [
+            "esp32_file_hub/config.json",
+            "/esp32_file_hub/config.json",
             "esp32_transfer/config.json",
             "/esp32_transfer/config.json",
             "config.json",

@@ -1,5 +1,5 @@
 @echo off
-title ESP32 File Transfer Installer
+title ESP32 File Hub Installer
 cd /d "%~dp0"
 python tools\deploy.py
 if %ERRORLEVEL% neq 0 (

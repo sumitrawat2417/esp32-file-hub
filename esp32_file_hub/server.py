@@ -15,11 +15,15 @@ try:
     from .dns import DNSServer
 except (ImportError, ValueError):
     try:
-        from esp32_transfer.storage import StorageManager
-        from esp32_transfer.dns import DNSServer
+        from esp32_file_hub.storage import StorageManager
+        from esp32_file_hub.dns import DNSServer
     except (ImportError, ValueError):
-        from storage import StorageManager
-        from dns import DNSServer
+        try:
+            from esp32_transfer.storage import StorageManager
+            from esp32_transfer.dns import DNSServer
+        except (ImportError, ValueError):
+            from storage import StorageManager
+            from dns import DNSServer
 
 
 class WebServer:
@@ -29,7 +33,7 @@ class WebServer:
         srv_cfg = config.get("server", {})
         self.port = srv_cfg.get("port", 80)
         self.chunk_size = srv_cfg.get("chunk_size", 1024)
-        self.static_dir = srv_cfg.get("static_dir", "esp32_transfer/www")
+        self.static_dir = srv_cfg.get("static_dir", "esp32_file_hub/www")
         self.ip_address = ip_address
         self.hostname = hostname
         self.config = config
@@ -157,6 +161,8 @@ class WebServer:
         """Locate index.html across standard library and project paths."""
         candidates = [
             self.static_dir + "/index.html",
+            "esp32_file_hub/www/index.html",
+            "/esp32_file_hub/www/index.html",
             "esp32_transfer/www/index.html",
             "/esp32_transfer/www/index.html",
             "www/index.html",
@@ -295,7 +301,7 @@ class WebServer:
     def _handle_get_wifi(self, client):
         """API handler: GET /api/wifi (Returns current Wi-Fi status and saved SSID)"""
         sta_ssid = self.config.get("wifi", {}).get("sta_ssid", "")
-        ap_ssid = self.config.get("wifi", {}).get("ap_ssid", "ESP32-FileTransfer")
+        ap_ssid = self.config.get("wifi", {}).get("ap_ssid", "ESP32-FileHub")
         self._send_json(client, {
             "mode": self.wifi_status.get("mode", "AP"),
             "ip": self.ip_address,
@@ -329,9 +335,12 @@ class WebServer:
             from .config import ConfigManager
         except (ImportError, ValueError):
             try:
-                from esp32_transfer.config import ConfigManager
+                from esp32_file_hub.config import ConfigManager
             except (ImportError, ValueError):
-                from config import ConfigManager
+                try:
+                    from esp32_transfer.config import ConfigManager
+                except (ImportError, ValueError):
+                    from config import ConfigManager
 
         config = ConfigManager.load()
         if "wifi" not in config:
@@ -346,7 +355,7 @@ class WebServer:
 
         if ConfigManager.save(config):
             self.config = config
-            target_ssid = config["wifi"]["sta_ssid"] or config["wifi"].get("ap_ssid", "ESP32-FileTransfer")
+            target_ssid = config["wifi"]["sta_ssid"] or config["wifi"].get("ap_ssid", "ESP32-FileHub")
             self._send_json(client, {
                 "success": True,
                 "message": "Wi-Fi settings saved. Rebooting to connect to '{}'...".format(target_ssid)

@@ -1,5 +1,5 @@
 """
-One-Click Deployment Tool for ESP32 File Transfer Tool
+One-Click Deployment Tool for ESP32 File Hub
 Automatically detects connected ESP32, syncs all project files and directories,
 and soft-reboots the device in seconds using MicroPython Raw REPL.
 Supports standalone executable builds (PyInstaller) and direct script execution.
@@ -34,6 +34,8 @@ def get_base_dir():
     # If this script is in tools/, the project root is one level up
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.abspath(os.path.join(script_dir, ".."))
+    if os.path.exists(os.path.join(parent_dir, "esp32_file_hub")):
+        return parent_dir
     if os.path.exists(os.path.join(parent_dir, "esp32_transfer")):
         return parent_dir
     return script_dir
@@ -271,30 +273,36 @@ def deploy():
     for obs in root_cleanup_files:
         uploader.remove_file(obs)
 
-    # Clean up legacy folders if migrating to esp32_transfer/
+    # Clean up legacy folders if migrating to esp32_file_hub/
+    uploader.remove_dir_recursive("esp32_transfer")
     uploader.remove_dir_recursive("lib")
     uploader.remove_dir_recursive("app")
     uploader.remove_dir_recursive("www")
 
-    # Files to sync: 100% packed inside esp32_transfer/
-    pkg_config = os.path.join(base_dir, "esp32_transfer", "config.json")
+    # Files to sync: 100% packed inside esp32_file_hub/
+    pkg_config = os.path.join(base_dir, "esp32_file_hub", "config.json")
     if not os.path.exists(pkg_config):
         pkg_config = os.path.join(base_dir, config_source)
 
     files_to_sync = [
-        (os.path.join("esp32_transfer", "__init__.py"), "esp32_transfer/__init__.py"),
-        (os.path.join("esp32_transfer", "app.py"), "esp32_transfer/app.py"),
-        (os.path.join("esp32_transfer", "config.py"), "esp32_transfer/config.py"),
-        (pkg_config, "esp32_transfer/config.json"),
-        (os.path.join("esp32_transfer", "wifi.py"), "esp32_transfer/wifi.py"),
-        (os.path.join("esp32_transfer", "dns.py"), "esp32_transfer/dns.py"),
-        (os.path.join("esp32_transfer", "storage.py"), "esp32_transfer/storage.py"),
-        (os.path.join("esp32_transfer", "server.py"), "esp32_transfer/server.py"),
-        (os.path.join("esp32_transfer", "setup_wifi.py"), "esp32_transfer/setup_wifi.py"),
-        (os.path.join("esp32_transfer", "www", "index.html"), "esp32_transfer/www/index.html"),
+        (os.path.join("esp32_file_hub", "__init__.py"), "esp32_file_hub/__init__.py"),
+        (os.path.join("esp32_file_hub", "app.py"), "esp32_file_hub/app.py"),
+        (os.path.join("esp32_file_hub", "config.py"), "esp32_file_hub/config.py"),
+        (pkg_config, "esp32_file_hub/config.json"),
+        (os.path.join("esp32_file_hub", "wifi.py"), "esp32_file_hub/wifi.py"),
+        (os.path.join("esp32_file_hub", "dns.py"), "esp32_file_hub/dns.py"),
+        (os.path.join("esp32_file_hub", "storage.py"), "esp32_file_hub/storage.py"),
+        (os.path.join("esp32_file_hub", "server.py"), "esp32_file_hub/server.py"),
+        (os.path.join("esp32_file_hub", "setup_wifi.py"), "esp32_file_hub/setup_wifi.py"),
+        (os.path.join("esp32_file_hub", "www", "index.html"), "esp32_file_hub/www/index.html"),
     ]
 
-    dirs_to_create = ["esp32_transfer", "esp32_transfer/www"]
+    # Include backward-compatibility shim if it exists locally
+    compat_shim = os.path.join(base_dir, "esp32_transfer.py")
+    if os.path.exists(compat_shim):
+        files_to_sync.append((compat_shim, "esp32_transfer.py"))
+
+    dirs_to_create = ["esp32_file_hub", "esp32_file_hub/www"]
     for d in dirs_to_create:
         uploader.make_remote_dir(d)
 
@@ -340,15 +348,15 @@ def deploy():
     print("=" * 56)
     print("Rebooting ESP32...")
     uploader.reboot()
-    print("\nYour ESP32 is ready! All files are packed in 'esp32_transfer/'.")
+    print("\nYour ESP32 is ready! All files are packed in 'esp32_file_hub/'.")
     print("1. From Terminal / REPL (1-line command):")
-    print("   >>> import esp32_transfer; esp32_transfer.start()")
+    print("   >>> import esp32_file_hub; esp32_file_hub.start()")
     print("2. From Thonny IDE:")
-    print("   Open 'esp32_transfer/app.py' and click Run (F5)!")
+    print("   Open 'esp32_file_hub/app.py' and click Run (F5)!")
     print("3. In Web Browser:")
     print("   Open: http://esp32.local/ (or http://192.168.4.1/)")
     print("4. Configure Wi-Fi from REPL:")
-    print("   >>> import esp32_transfer; esp32_transfer.setup_wifi()")
+    print("   >>> import esp32_file_hub; esp32_file_hub.setup_wifi()")
     print("   (or click '📶 Wi-Fi' in the web interface)")
     print("=" * 56)
     pause_if_interactive()

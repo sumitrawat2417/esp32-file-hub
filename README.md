@@ -70,9 +70,9 @@ The project targets a standard ESP32 development board with an onboard USB-to-UA
 
 ```mermaid
 flowchart LR
-    Browser["Browser<br/>PC, phone or tablet"] <-->|"Wi-Fi: HTTP 80, DNS 53"| ESP["ESP32<br/>MicroPython + esp32_transfer"]
-    ESP <-->|"os module"| Flash[("On-board flash<br/>filesystem")]
-    PC["Host PC<br/>tools/deploy.py"] <-->|"USB serial, raw REPL"| ESP
+    Browser["Client Browser (PC, Phone, Tablet)"] <-->|"Wi-Fi: HTTP 80, DNS 53"| ESP["ESP32 (MicroPython + esp32_transfer)"]
+    ESP <-->|"os module"| Flash[("On-board Flash Filesystem")]
+    PC["Host PC (tools/deploy.py)"] <-->|"USB Serial (Raw REPL)"| ESP
 ```
 
 ### Bill of Materials
@@ -94,17 +94,17 @@ On boot, `start()` loads the configuration, brings up Wi-Fi, and then enters a s
 
 ```mermaid
 flowchart TD
-    A["esp32_transfer.start()"] --> B["Load config.json<br/>merge with defaults"]
-    B --> C{"Network saved<br/>in sta_ssid?"}
-    C -- yes --> D["Try Station mode<br/>for connect_timeout_s"]
-    C -- no --> F["REPL prompt<br/>1: join a Wi-Fi network<br/>2: Access Point, default"]
-    D -- connected --> G["Station mode<br/>router-assigned IP"]
-    D -- timed out --> F
-    F -- "2 or Enter" --> H["Access Point mode<br/>192.168.4.1 by default"]
-    F -- 1 --> I["Interactive Wi-Fi wizard"]
-    I -- connected --> G
-    I -- cancelled --> H
-    G --> J["Start DNS responder<br/>and HTTP server"]
+    A["esp32_transfer.start()"] --> B["Load config.json and defaults"]
+    B --> C{"sta_ssid configured in settings"}
+    C -->|Yes| D["Try Station mode for 15s"]
+    C -->|No| F["REPL Prompt: Mode Selection"]
+    D -->|Connected| G["Station Mode (Router IP)"]
+    D -->|Timeout| F
+    F -->|2 or Enter| H["Access Point Mode (192.168.4.1)"]
+    F -->|1| I["Interactive Wi-Fi Wizard"]
+    I -->|Connected| G
+    I -->|Cancelled| H
+    G --> J["Start DNS and HTTP Server"]
     H --> J
 ```
 
@@ -112,19 +112,20 @@ An upload from the browser follows this path:
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser
-    participant S as WebServer (TCP 80)
-    participant St as StorageManager
+    autonumber
+    actor Browser
+    participant Server as WebServer (Port 80)
+    participant Storage as StorageManager
 
-    B->>S: GET /api/hash?path=dest (nested files)
-    S-->>B: sha256
-    Note over B: Compare with local SHA-256, then Replace or Skip
-    B->>S: POST /api/upload?path=dest&overwrite=true
-    S->>S: Check Content-Length against free space
-    S->>St: write_stream(dest, length)
-    St->>St: Write dest.upload.tmp in 1 KB chunks
-    St->>St: Byte count matches, replace dest
-    S-->>B: 201 with path and size
+    Browser->>Server: GET /api/hash (check existing file)
+    Server-->>Browser: Return SHA-256 hash
+    Note over Browser: Compare local hash (Skip if identical)
+    Browser->>Server: POST /api/upload (stream file payload)
+    Server->>Server: Check Content-Length against free space
+    Server->>Storage: Stream into temporary file (.upload.tmp)
+    Storage->>Storage: Verify byte count matches Content-Length
+    Storage->>Storage: Atomically commit to target path
+    Server-->>Browser: 201 Created (Upload complete)
 ```
 
 The HTTP server, DNS responder, and storage layer share one thread. DNS is polled between `accept()` calls, which use a 0.2 s timeout. That avoids the memory cost of threads, but it also means requests are handled one at a time.

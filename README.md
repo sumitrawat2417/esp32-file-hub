@@ -2,7 +2,7 @@
 
 # ESP32 File Transfer Tool
 
-**A lightweight, browser-based file manager and transfer utility for MicroPython-powered ESP32 microcontrollers over local Wi-Fi.**
+**A browser-based file manager that runs on an ESP32 with MicroPython, so you can browse, upload, download, view, and delete files over Wi-Fi without a USB cable.**
 
 [![License](https://img.shields.io/github/license/sumitrawat2417/esp32-transfer)](LICENSE)
 [![MicroPython](https://img.shields.io/badge/MicroPython-v1.19%2B-blue)](https://micropython.org/)
@@ -16,219 +16,221 @@
 
 ## Overview
 
-**ESP32 File Transfer Tool** is an embedded web utility that runs directly on an ESP32 microcontroller running MicroPython. It hosts a local single-page web application over Wi-Fi, allowing users to browse, upload, download, view, and organize files stored on the board's internal flash memory from any modern browser.
+**ESP32 File Transfer Tool** is a MicroPython package that runs a web-based file manager directly on an ESP32, for anyone who needs to manage the files on a MicroPython board: scripts, JSON configuration, web assets, and logs.
 
-**The problem:** Managing auxiliary assets on MicroPython devices—such as configuration JSON files, UI graphics, text logs, web assets, and modular Python libraries—typically requires physical USB tethering and a desktop serial tool like Thonny. Updating files in field setups or enclosed IoT enclosures without disassembly is cumbersome.
+**The problem:** Moving files on and off a MicroPython board normally means a USB cable and a desktop tool such as Thonny. That is inconvenient when the board sits in an enclosure or is deployed away from your desk.
 
-**The approach:** The tool packages an HTTP web server, a non-blocking DNS server for captive portal support and mDNS (`http://esp32.local/`), a recursive filesystem engine, and a complete self-contained web interface into a single target directory (`esp32_transfer/`). When powered on, the ESP32 either connects to an existing local Wi-Fi network (Station mode) or creates its own standalone access point (AP mode), letting any computer or mobile phone manage the board's filesystem without installing software or tethering cables.
-
----
+**The approach:** The board serves its own single-page web interface over HTTP. It either joins an existing 2.4 GHz Wi-Fi network (Station mode) or hosts its own network (Access Point mode), so a browser on a PC, phone, or tablet can manage the flash filesystem. All runtime code lives in a single directory, `/esp32_transfer`, which keeps the board's root free for your own files. The interface has no external CDN, font, or script dependencies, so it works with no internet access. USB is needed only once, to install the package.
 
 ## Features
 
-- **Self-contained MicroPython package:** All application runtime code, configurations, and static assets reside within `/esp32_transfer/`, keeping the root directory clean for user projects.
-- **Embedded single-page web interface:** Responsive dark-themed UI built with vanilla HTML, CSS, and modern JavaScript, featuring zero external CDN dependencies to operate fully offline.
-- **Dual Wi-Fi operational modes:**
-  - *Station (STA) mode:* Connects as a client to an existing 2.4 GHz wireless network or mobile hotspot.
-  - *Access Point (AP) mode:* Generates an independent wireless network (`ESP32-FileTransfer` at `192.168.4.1`) with captive portal redirection.
-  - *Automatic failover:* Automatically falls back to Access Point mode if a configured router connection times out.
-- **Interactive terminal Wi-Fi wizard:** Includes a serial REPL scanner (`esp32_transfer.setup_wifi()`) that detects nearby networks and configures credentials interactively.
-- **Chunked streaming transfers:** Reads and writes network payloads in 1024-byte chunks, keeping memory consumption flat and preventing out-of-memory errors on RAM-constrained boards.
-- **Atomic upload staging:** Streams inbound uploads to temporary `.upload.tmp` files and verifies payload integrity before atomically replacing target files.
-- **Storage monitoring and safety checks:** Queries real-time flash capacity via `os.statvfs` and compares available space against incoming `Content-Length` headers before accepting file writes.
-- **Recursive directory sizing and analytics:** Calculates cumulative directory weights using recursive `os.ilistdir` traversal and displays proportional capacity badges and gradient bars in the web interface.
-- **Inline file viewer:** Inspects text and configuration files up to 4,000 lines directly in the browser with line numbering and clipboard copying.
-- **Live client-side filtering:** Real-time search input dynamically filters directory listings by name without server round-trips.
-- **Differential deployment tool:** Includes a host-side deployment script (`deploy.py`) that auto-detects the connected COM port, computes SHA-256 hashes of on-board files via raw REPL, and only writes modified files to preserve flash endurance.
+**File management**
 
----
+- **Browse and navigate:** Breadcrumb navigation with folders listed first, then files alphabetically.
+- **Upload files and folders:** Use the file picker, the folder picker, or drag and drop. Nested folder structures are recreated on the board.
+- **Duplicate-aware uploads:** When a file already exists, the browser compares sizes and SHA-256 hashes and skips identical files. For genuine conflicts you choose Replace or Skip, and batch uploads add Skip All and Replace All.
+- **Download, delete, and create folders:** Deleting asks for confirmation and removes directory trees recursively.
+- **Inline file viewer:** Opens recognized text and code files (for example `.py`, `.json`, `.txt`, `.log`, `.html`) with line numbers and a copy button, showing up to 4,000 lines.
+- **Live filter:** Filters the current directory by name in the browser, with no requests to the board.
+- **Size and share display:** Each entry shows its size and its share of the current directory as a percentage and a bar. Folder sizes are calculated recursively.
+- **Storage meter:** Shows free, total, and used flash space.
+
+**Networking**
+
+- **Two Wi-Fi modes:** Station mode joins your router or phone hotspot. Access Point mode creates the `ESP32-FileTransfer` network.
+- **Wi-Fi setup without USB:** Change the network from the web interface, or run the interactive terminal wizard, which scans for networks and lists them by signal strength.
+- **Name resolution:** Sets the board hostname (default `esp32`) and runs a small DNS responder on UDP port 53 that answers every query with the board's IP address.
+- **Quiet connectivity probes:** Answers the Windows and Android captive-portal checks (`/connecttest.txt`, `/generate_204`) and `/favicon.ico` without log noise.
+
+**Memory and file safety**
+
+- **Streaming I/O:** Uploads, downloads, and the web page itself are read and written in 1 KB chunks (configurable), with `gc.collect()` after each request.
+- **Space check before writing:** An upload is rejected if its `Content-Length` exceeds free flash space.
+- **Temporary-file staging:** Uploads are written to a `.upload.tmp` file and only committed if the received byte count matches `Content-Length`.
+- **Path normalization:** Paths are normalized so `..` segments cannot climb above the filesystem root, and the root itself cannot be deleted.
+
+**Host tooling**
+
+- **Differential installer:** `tools/deploy.py` finds the board's serial port, compares SHA-256 hashes, and uploads only the files that changed, which limits flash writes.
+- **One-click launcher:** `install.bat` runs the installer on Windows. `tools/build_installer.bat` builds a standalone executable with PyInstaller.
 
 ## Tech Stack
 
 | Area | Technology | Purpose |
 | --- | --- | --- |
-| Microcontroller Firmware | MicroPython (v1.19+) | Python runtime on the ESP32 |
-| Backend & Server | MicroPython `socket`, `network`, `os` | Embedded HTTP/1.1 socket server, REST routing, and DNS captive portal |
-| Frontend | Vanilla HTML5, CSS3, JavaScript (ES6+) | Single-page application, dark theme, interactive modals, responsive tables |
-| Host Tooling | Python 3, PySerial | Differential sync deployment engine (`deploy.py`), raw REPL serial communicator |
-| Packaging | PyInstaller, Windows Batch | One-click desktop launcher (`install.bat`) and standalone executable recipe |
-
----
+| Firmware | MicroPython (v1.19+) | Python runtime on the ESP32 |
+| On-board server | MicroPython `socket`, `network`, `os` | HTTP/1.1 socket server, REST routing, DNS responder, filesystem access |
+| Web interface | Vanilla HTML5, CSS3, JavaScript (ES6+) in one `index.html` | Single-page file manager with no external dependencies |
+| Host tooling | Python 3, PySerial | Raw REPL communication and differential sync (`tools/deploy.py`) |
+| Packaging | Windows batch, PyInstaller | One-click launcher and standalone installer build |
 
 ## Hardware Overview
 
-The firmware is designed for standard ESP32 development boards equipped with an onboard USB-to-UART bridge (Silicon Labs CP2102, WCH CH340, CH9102, or FTDI).
+The project targets a standard ESP32 development board with an onboard USB-to-UART bridge (CP210x, CH340, CH9102, or FTDI). It needs no external components and does not configure any GPIO pins. The board connects over 2.4 GHz Wi-Fi at runtime and over USB serial for installation.
 
 ```mermaid
 flowchart LR
-    Client["Client Browser\n(PC / Phone / Tablet)"] <-->|"Wi-Fi (HTTP :80 / DNS :53)"| ESP["ESP32 Microcontroller\n(MicroPython Runtime)"]
-    ESP <-->|"Internal Flash (VFS)"| Storage["LittleFS / FAT Partition\n(/esp32_transfer)"]
-    PC["Host Computer\n(Initial Setup)"] <-->|"USB Serial (Raw REPL)"| ESP
+    Browser["Browser<br/>PC, phone or tablet"] <-->|"Wi-Fi: HTTP 80, DNS 53"| ESP["ESP32<br/>MicroPython + esp32_transfer"]
+    ESP <-->|"os module"| Flash[("On-board flash<br/>filesystem")]
+    PC["Host PC<br/>tools/deploy.py"] <-->|"USB serial, raw REPL"| ESP
 ```
 
 ### Bill of Materials
 
-| Qty | Component | Model / Part | Purpose | Notes |
+| Qty | Component | Model / part number | Purpose | Notes |
 | ---: | --- | --- | --- | --- |
-| 1 | Development Board | ESP32-WROOM-32 / ESP32-WROVER | Target microcontroller | Any standard 30-pin or 38-pin board with 4 MB+ flash |
-| 1 | USB Cable | Micro-USB or USB-C (data-capable) | Firmware installation and serial REPL | Must support USB data lines, not charge-only |
-| 1 | Host Computer | Windows, macOS, or Linux | Initial setup and flashing | Python 3.8+ with `pyserial` installed |
+| 1 | Development board | ESP32-WROOM-32 or ESP32-WROVER | Target microcontroller | Any standard 30-pin or 38-pin board with 4 MB or more of flash |
+| 1 | USB cable | Micro-USB or USB-C | Installation and serial REPL | Must carry data, not charge only |
+| 1 | Host computer | Windows, macOS, or Linux | Installation | Python 3.8+ with `pyserial` |
 
-### Power Specifications
+### Power
 
-- **Supply Voltage:** 5 V DC supplied via USB port (or regulated 3.3 V on the 3V3 rail).
-- **Wi-Fi Radio Frequency:** 2.4 GHz b/g/n (ESP32 hardware does not support 5 GHz Wi-Fi).
-
----
+- **Supply:** 5 V DC over USB, or regulated 3.3 V on the 3V3 pin.
+- **Wi-Fi band:** 2.4 GHz b/g/n only. The ESP32 radio does not support 5 GHz.
 
 ## Architecture
 
-The project decouples host deployment utilities from the on-board runtime package:
+On boot, `start()` loads the configuration, brings up Wi-Fi, and then enters a single-threaded loop that polls the DNS socket and accepts HTTP connections one at a time.
 
-```text
-esp32-transfer/
-├── esp32_transfer/              # Target MicroPython package (flashed to ESP32)
-│   ├── __init__.py              # Public package exports: start(), run(), setup_wifi()
-│   ├── app.py                   # Thonny IDE launcher (Run F5)
-│   ├── config.py                # ConfigManager: schema validation & fallback defaults
-│   ├── config.json              # Device configuration file (Wi-Fi and server settings)
-│   ├── wifi.py                  # WiFiManager: Station connection & AP fallback controller
-│   ├── dns.py                   # DNSServer: UDP captive portal and mDNS resolver
-│   ├── storage.py               # StorageManager: recursive sizing, atomic I/O, hash verification
-│   ├── server.py                # WebServer: non-blocking HTTP socket server & REST routing
-│   ├── setup_wifi.py            # Interactive terminal Wi-Fi scanning wizard
-│   └── www/
-│       └── index.html           # Production single-page application (zero external CDNs)
-├── tools/
-│   ├── deploy.py                # PC-side differential sync uploader (raw REPL)
-│   └── build_installer.bat      # PyInstaller build script for standalone executable
-├── install.bat                  # One-click Windows runner
-├── LICENSE                      # MIT License
-└── README.md                    # Project documentation
+```mermaid
+flowchart TD
+    A["esp32_transfer.start()"] --> B["Load config.json<br/>merge with defaults"]
+    B --> C{"Network saved<br/>in sta_ssid?"}
+    C -- yes --> D["Try Station mode<br/>for connect_timeout_s"]
+    C -- no --> F["REPL prompt<br/>1: join a Wi-Fi network<br/>2: Access Point, default"]
+    D -- connected --> G["Station mode<br/>router-assigned IP"]
+    D -- timed out --> F
+    F -- "2 or Enter" --> H["Access Point mode<br/>192.168.4.1 by default"]
+    F -- 1 --> I["Interactive Wi-Fi wizard"]
+    I -- connected --> G
+    I -- cancelled --> H
+    G --> J["Start DNS responder<br/>and HTTP server"]
+    H --> J
 ```
 
-### HTTP Request Lifecycle
+An upload from the browser follows this path:
 
 ```mermaid
 sequenceDiagram
-    participant Browser as Client Browser
-    participant DNS as DNSServer (:53 UDP)
-    participant Server as WebServer (:80 TCP)
-    participant Storage as StorageManager
+    participant B as Browser
+    participant S as WebServer (TCP 80)
+    participant St as StorageManager
 
-    Browser->>DNS: Resolve esp32.local
-    DNS-->>Browser: IP Address (Assigned IP or 192.168.4.1)
-    Browser->>Server: GET /api/files?path=/
-    Server->>Storage: list_dir("/") with recursive size calculation
-    Storage-->>Server: Directory entries & cumulative bytes
-    Server-->>Browser: 200 OK (JSON directory model)
-    Browser->>Server: POST /api/upload?path=/&overwrite=true
-    Server->>Storage: Stream to .upload.tmp -> Atomic rename
-    Storage-->>Server: Success
-    Server-->>Browser: 200 OK (File saved)
+    B->>S: GET /api/hash?path=dest (nested files)
+    S-->>B: sha256
+    Note over B: Compare with local SHA-256, then Replace or Skip
+    B->>S: POST /api/upload?path=dest&overwrite=true
+    S->>S: Check Content-Length against free space
+    S->>St: write_stream(dest, length)
+    St->>St: Write dest.upload.tmp in 1 KB chunks
+    St->>St: Byte count matches, replace dest
+    S-->>B: 201 with path and size
 ```
 
----
+The HTTP server, DNS responder, and storage layer share one thread. DNS is polled between `accept()` calls, which use a 0.2 s timeout. That avoids the memory cost of threads, but it also means requests are handled one at a time.
 
 ## Getting Started
 
 ### Prerequisites
 
-1. **MicroPython Firmware:** Install standard MicroPython firmware (v1.19 or later) on your ESP32 board.
-2. **Python Environment (Host PC):** Python 3.8+ with the `pyserial` package:
-   ```bash
-   pip install pyserial
-   ```
-3. **USB Serial Driver:** Ensure your computer recognizes the board's USB-to-UART bridge (CP210x or CH340 drivers).
+- An ESP32 development board running MicroPython v1.19 or later ([firmware downloads](https://micropython.org/download/ESP32_GENERIC/))
+- A USB data cable and the driver for your board's USB-to-UART bridge (CP210x or CH340)
+- Python 3.8 or later on the host PC, with PySerial:
 
----
+  ```bash
+  pip install pyserial
+  ```
+- Git
 
-### Installation (Flashing to ESP32)
+### Install onto the board
 
-> **Important:** Close Thonny, PuTTY, Arduino IDE, or any other software holding the COM port open before running the deployment script.
+Close Thonny, PuTTY, the Arduino IDE, and any other program that holds the serial port open. The installer cannot connect while the port is in use.
 
-#### Option 1: One-Click Windows Installer
-Connect the ESP32 via USB and double-click **`install.bat`** in the repository root.
+> [!WARNING]
+> Before copying files, the installer deletes these items from the board's root if they exist: `main.py`, `config.json`, `file_manager.py`, `web_server.py`, `wifi_manager.py`, `setup_wifi.py`, `esp32_transfer.py`, and the folders `lib/`, `app/`, and `www/`. They are leftovers from earlier layouts of this project. Back up anything of your own that lives there before you run it.
 
-#### Option 2: Command Line (Windows, macOS, Linux)
+**Option 1: One-click installer (Windows)**
+
+Connect the board over USB and double-click `install.bat` in the repository root.
+
+**Option 2: Command line (Windows, macOS, Linux)**
+
 ```bash
 git clone https://github.com/sumitrawat2417/esp32-transfer.git
 cd esp32-transfer
 python tools/deploy.py
 ```
 
-The uploader automatically:
-1. Detects the active serial COM port.
-2. Connects to the MicroPython raw REPL.
-3. Purges legacy root files from previous versions.
-4. Creates `/esp32_transfer/` and `/esp32_transfer/www/` directories.
-5. Computes SHA-256 hashes of on-board files and uploads only modified files.
-6. Preserves existing saved Wi-Fi credentials in `config.json`.
-7. Soft-reboots the microcontroller.
+The installer:
 
----
+1. Detects the serial port by matching the port description against `cp210`, `ch340`, `ch9102`, `ftdi`, `usb to uart`, and `esp32`. If none match, it uses the first port that is not `COM1`.
+2. Opens the MicroPython raw REPL.
+3. Removes the legacy files listed above.
+4. Creates `/esp32_transfer` and `/esp32_transfer/www`.
+5. Reads SHA-256 hashes of the 10 package files already on the board and uploads only the ones that differ.
+6. Keeps an existing `esp32_transfer/config.json` so saved Wi-Fi credentials survive re-installs.
+7. Leaves the raw REPL and closes the port.
 
-## Usage
+### Start the server
 
-### 1. Launching the Server
+The server does not start by itself after installation. Choose one way to start it.
 
-#### Method A: Single Command in REPL
-Open your preferred serial terminal (Thonny, PuTTY, mpremote) at 115200 baud and run:
+**From the REPL** (115200 baud, using Thonny, PuTTY, or `mpremote`):
+
 ```python
 import esp32_transfer
 esp32_transfer.start()
 ```
 
-#### Method B: Thonny IDE F5 Runner
-1. In Thonny, navigate to **File > Open > MicroPython device**.
-2. Open `/esp32_transfer/app.py`.
-3. Press **F5** (Run current script).
+**From Thonny:** open `/esp32_transfer/app.py` from the MicroPython device (File, Open, MicroPython device) and press F5.
 
----
+**On every boot:** create a `main.py` on the board containing:
 
-### 2. Connecting to the Web Interface
-
-Upon startup, the serial console outputs the active network mode and connection address:
-
-#### When in Access Point Mode (Default):
-1. Connect your PC, phone, or tablet to the Wi-Fi network:
-   - **SSID:** `ESP32-FileTransfer`
-   - **Password:** *(Open by default, no password)*
-2. Open your browser and navigate to:
-   ```text
-   http://192.168.4.1/
-   ```
-   *(or `http://esp32.local/` on supported devices)*
-
-#### When in Station Mode:
-Ensure your computer or mobile device is connected to the same local Wi-Fi router, then open:
-```text
-http://esp32.local/
-```
-*(or the explicit IP address printed in the terminal console, e.g. `http://192.168.1.150/`)*
-
----
-
-### 3. Configuring Wi-Fi Credentials
-
-#### Method A: Via the Web Interface
-1. Click the **Wi-Fi** button in the top navigation bar.
-2. Enter your 2.4 GHz Wi-Fi SSID and Password.
-3. Click **Save & Reboot**. The ESP32 will store the credentials in `esp32_transfer/config.json` and restart.
-
-#### Method B: Via the Terminal Wizard
-In the MicroPython REPL, run:
 ```python
 import esp32_transfer
-esp32_transfer.setup_wifi()
+esp32_transfer.start()
 ```
-The utility scans for nearby wireless networks, displays a numbered list ranked by signal strength, and prompts for your network index and password.
 
----
+### Verify it works
 
-## Configuration
+If no network is saved yet, the REPL first asks how the board should connect. Press Enter to accept the default, Access Point mode:
 
-Settings are stored on the board in `/esp32_transfer/config.json`:
+```text
+Select Wi-Fi Operation Mode:
+  [1] Connect to Mobile Hotspot / Wi-Fi (Stay on PC network)
+  [2] Standalone Access Point (ESP32-FileTransfer AP)
+Enter choice [1 or 2, default: 2]:
+```
+
+The REPL then prints a banner like this one (abridged):
+
+```text
+====================================================
+        ESP32 File Transfer Tool v1.0.0
+====================================================
+...
+📡 MODE: STANDALONE ACCESS POINT (Host Mode)
+   Wi-Fi Name (SSID) : ESP32-FileTransfer
+   Board IP          : 192.168.4.1
+   Web Address       : http://192.168.4.1/ or http://esp32.local/
+```
+
+Join the `ESP32-FileTransfer` network (open by default) and browse to `http://192.168.4.1/`. You should see the storage meter and the root directory listing. In Station mode, the banner shows the assigned IP and `http://esp32.local/` instead.
+
+### Troubleshooting
+
+| Symptom | Likely cause and fix |
+| --- | --- |
+| Installer reports the port is busy | Another program holds the serial port. Close Thonny and any serial monitor, then retry. |
+| Installer reports no ESP32 detected | Use a data-capable USB cable and install the CP210x or CH340 driver. |
+| The page does not load in Access Point mode | Phones often drop a Wi-Fi network that has no internet. Keep the connection when prompted and turn off mobile data while you work. |
+| `esp32.local` does not resolve | Use the board's IP address from the REPL banner. Some clients do not resolve `.local` names. |
+| The board never joins your Wi-Fi | The ESP32 supports 2.4 GHz only. Check the SSID, the password, and that the band is 2.4 GHz. |
+| The page shows an old version after an update | Hard refresh with Ctrl+Shift+R (Cmd+Shift+R on macOS). |
+
+### Configuration
+
+Settings live in `/esp32_transfer/config.json` on the board. Missing keys fall back to these defaults:
 
 ```json
 {
@@ -248,85 +250,156 @@ Settings are stored on the board in `/esp32_transfer/config.json`:
 }
 ```
 
-| Field | Type | Default | Description |
+| Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `wifi.hostname` | String | `"esp32"` | Hostname registered via DHCP and mDNS (`http://esp32.local/`) |
-| `wifi.sta_ssid` | String | `""` | Target 2.4 GHz Wi-Fi network name for Station mode |
-| `wifi.sta_password` | String | `""` | Password for the target Wi-Fi network |
-| `wifi.ap_ssid` | String | `"ESP32-FileTransfer"` | Broadcast SSID when operating in Access Point mode |
-| `wifi.ap_password` | String | `""` | Access Point security key (leave empty for open access) |
-| `wifi.connect_timeout_s` | Integer | `15` | Timeout in seconds before falling back from STA to AP mode |
-| `server.port` | Integer | `80` | TCP port on which the HTTP server listens |
-| `server.chunk_size` | Integer | `1024` | Buffer chunk size in bytes for network and flash streaming |
-| `server.static_dir` | String | `"esp32_transfer/www"` | Flash directory containing static web application assets |
+| `wifi.hostname` | string | `"esp32"` | Board hostname, set with `network.hostname()` (reachable as `http://esp32.local/` where supported) |
+| `wifi.sta_ssid` | string | `""` | 2.4 GHz network to join in Station mode |
+| `wifi.sta_password` | string | `""` | Password for that network, stored as plain text |
+| `wifi.ap_ssid` | string | `"ESP32-FileTransfer"` | Network name broadcast in Access Point mode |
+| `wifi.ap_password` | string | `""` | Access Point password. Used (WPA2-PSK) only when it has at least 8 characters; otherwise the network is open |
+| `wifi.connect_timeout_s` | integer | `15` | Seconds to wait for Station mode before giving up |
+| `server.port` | integer | `80` | TCP port for the HTTP server |
+| `server.chunk_size` | integer | `1024` | Buffer size in bytes for network and flash streaming |
+| `server.static_dir` | string | `"esp32_transfer/www"` | Directory that contains `index.html` |
 
----
+## Usage
 
-## REST API Reference
+### Manage files in the browser
 
-The embedded HTTP server exposes the following REST endpoints. Wildcard CORS (`Access-Control-Allow-Origin: *`) is enabled on all responses:
+1. Open the board's address (`http://192.168.4.1/` in Access Point mode, or `http://esp32.local/` or the printed IP in Station mode).
+2. Click a folder to enter it, or use the breadcrumb to go back up.
+3. Upload by dropping files or folders on the drop zone, or use Upload Files and Upload Folder. The destination is the directory you are currently viewing.
+4. If a file already exists, review the comparison and choose Replace or Skip.
+5. Use the row actions to view, download, or delete an entry. Use New Folder to create a directory and the filter box to narrow the list.
 
-| Method | Endpoint | Parameters / Payload | Status | Description |
+### Change the Wi-Fi network
+
+**From the web interface:** Click Wi-Fi, enter the SSID and password, and click Save & Connect. The board writes the credentials to `config.json` and resets. Reset to AP Host clears the saved network and resets the board.
+
+**From the terminal:**
+
+```python
+import esp32_transfer
+esp32_transfer.setup_wifi()
+```
+
+The wizard scans for networks, lists up to ten by signal strength, lets you rescan or type an SSID manually, and saves the credentials once the board connects.
+
+Both web actions reset the board. The server only comes back on its own if you set up the `main.py` start-on-boot file described above. Otherwise, start it again from the REPL.
+
+### REST API
+
+The web interface uses this HTTP API, and you can call it directly. Errors return `{"error": "...", "status": <code>}`.
+
+| Method | Endpoint | Parameters | Success response | Other statuses |
 | --- | --- | --- | --- | --- |
-| `GET` | `/` | None | 200 | Serves the single-page application (`index.html`) |
-| `GET` | `/api/storage` | None | 200 | Flash storage metrics (`total_bytes`, `free_bytes`, `used_pct`, MBs) |
-| `GET` | `/api/files` | Query: `path` (default: `/`) | 200 | Returns directory metadata and entries array (`{"path": "...", "entries": [...]}`) |
-| `POST` | `/api/upload` | Query: `path` (destination file), `overwrite` | 201 | Streams payload to target path via atomic `.upload.tmp` staging |
-| `GET` | `/api/download` | Query: `path` | 200 | Streams requested file with `Content-Disposition: attachment` |
-| `DELETE` | `/api/files` | Query: `path` | 200 | Deletes a file or recursively removes a directory tree |
-| `POST` | `/api/mkdir` | Query: `path` | 201 | Recursively creates parent and target directories on flash |
-| `GET` | `/api/hash` | Query: `path` | 200 | Computes SHA-256 checksum (`{"path": "...", "sha256": "..."}`) |
-| `GET` | `/api/wifi` | None | 200 | Returns mode (`AP`/`STA`), active IP, hostname, and SSID config |
-| `POST` | `/api/wifi` | Body: `{"sta_ssid": "...", "sta_password": "..."}` | 200 | Writes credentials to `config.json` and initiates soft-reboot |
+| `GET` | `/` | none | The web interface (`index.html`) | 500 if the file is missing |
+| `GET` | `/api/storage` | none | `total_bytes`, `free_bytes`, `used_bytes`, `used_pct`, `total_mb`, `free_mb`, `used_mb` | none |
+| `GET` | `/api/files` | `path` (default `/`) | `{"path": "...", "entries": [{"name", "is_dir", "size"}]}`, folders first | 404 if the directory does not exist |
+| `POST` | `/api/mkdir` | `path` | `201` with `{"success": true, "path": "..."}`. Parent folders are created | 400 without `path` |
+| `GET` | `/api/download` | `path` | File stream with `Content-Disposition: attachment` | 404 if missing or a directory |
+| `GET` | `/api/hash` | `path` | `{"path": "...", "sha256": "..."}` | 404 if missing or a directory |
+| `POST` | `/api/upload` | `path` (full destination file path), `overwrite=true\|false` | `201` with `{"success": true, "path": "...", "size": N}`. Body is the raw file bytes | 400 without `path` or `Content-Length`, 409 if the file exists and `overwrite` is not `true`, 413 if there is not enough space, 500 on a write error |
+| `DELETE` | `/api/files` | `path` | `{"success": true, "path": "..."}`. Directories are removed recursively | 404 if missing or if `path` is `/` |
+| `GET` | `/api/wifi` | none | `mode`, `ip`, `hostname`, `connected_ssid`, `saved_sta_ssid`, `ap_ssid` | none |
+| `POST` | `/api/wifi` | JSON body: `sta_ssid`, `sta_password`, optional `hostname` | `{"success": true, "message": "..."}`, then the board resets | 400 for invalid JSON |
 
----
+Examples:
+
+```bash
+# List the root directory
+curl "http://esp32.local/api/files?path=/"
+
+# Upload a file (creates /data if needed)
+curl -X POST --data-binary @notes.txt "http://esp32.local/api/upload?path=/data/notes.txt&overwrite=true"
+
+# Download it again
+curl -o notes.txt "http://esp32.local/api/download?path=/data/notes.txt"
+
+# Delete it
+curl -X DELETE "http://esp32.local/api/files?path=/data/notes.txt"
+```
+
+Notes for API clients: every response closes the connection, uploads need a `Content-Length` header (chunked request bodies are not supported), and request headers must fit in 4,096 bytes. Responses include `Access-Control-Allow-Origin: *`.
+
+## Project Structure
+
+```text
+esp32-transfer/
+├── esp32_transfer/            # Package copied to the ESP32
+│   ├── __init__.py            # Public API: start(), run(), setup_wifi(), main
+│   ├── app.py                 # Thonny F5 launcher
+│   ├── config.py              # ConfigManager: defaults and merging
+│   ├── config.json            # Default Wi-Fi and server settings
+│   ├── wifi.py                # WiFiManager: Station, Access Point, scan wizard
+│   ├── dns.py                 # DNSServer: UDP responder on port 53
+│   ├── storage.py             # StorageManager: sizes, listing, hashing, staged writes
+│   ├── server.py              # WebServer: HTTP loop and REST routes
+│   ├── setup_wifi.py          # Terminal Wi-Fi wizard entry point
+│   └── www/
+│       └── index.html         # Single-page web interface
+├── tools/
+│   ├── deploy.py              # Host-side differential installer (PySerial, raw REPL)
+│   └── build_installer.bat    # PyInstaller recipe for a standalone installer
+├── install.bat                # One-click Windows launcher for deploy.py
+├── LICENSE                    # MIT License
+└── README.md
+```
 
 ## Status and Known Limitations
 
-**Status:** Stable release (v1.0.0). Packaged as a self-contained library directory.
+**Status:** Version 1.0.0 (the version printed by the app). There is no tagged release yet.
 
-- **2.4 GHz Wi-Fi Only:** The ESP32 hardware radio only supports 2.4 GHz networks. 5 GHz Wi-Fi networks will not be detected or supported.
-- **MicroPython Heap Constraints:** While file transfers stream in 1 KB chunks, opening text files larger than 100 KB in the browser's inline viewer can stress the browser rendering thread. For large logs, use the **Download** feature.
-- **Port Locking during Flash:** The deployment script communicates via the USB-to-UART bridge. If Thonny or a terminal emulator remains connected to the COM port, the script will be denied access.
-- **mDNS Support Variations:** While `http://esp32.local/` functions on Windows 10/11, macOS, and iOS, some older Android versions require navigating directly to the board's numeric IP address (`http://192.168.4.1/` in AP mode).
-
----
+- **Tested on:** A standard ESP32 development board with a CP210x/CH340-class USB-UART bridge, on Windows. The exact board revision and MicroPython build were not recorded. Other boards, macOS, and Linux are not verified.
+- **No authentication:** Anyone who can reach the board can list, read, overwrite, and delete every file on it. That includes `esp32_transfer/config.json`, which holds the saved Wi-Fi password in plain text. The Access Point is open unless you set `wifi.ap_password`, and the API sends `Access-Control-Allow-Origin: *`. Use it on networks you trust.
+- **Prompt on first run and after a failed connection:** `start()` asks you to pick a Wi-Fi mode in the REPL when no network is saved or the saved one cannot be joined. It waits for your answer, so an unattended start cannot fall back to Access Point mode by itself.
+- **No automatic restart:** The installer removes `main.py` from the board. After a reset, including the reset triggered by saving Wi-Fi settings, the server runs again only if you add the start-on-boot `main.py`.
+- **Installer cleanup:** The installer deletes the legacy root files and folders listed under Getting Started.
+- **Uploads are not a single atomic replace:** The file is staged and verified by byte count, but the commit removes the old file before renaming the staged one. A power loss in that moment could leave neither.
+- **One request at a time:** The server is single-threaded, so a large transfer delays other requests. Uploads need a `Content-Length` header and use a 20-second socket timeout.
+- **Viewer limits:** The viewer loads the whole file into the browser and shows the first 4,000 lines. Download large files instead.
+- **2.4 GHz only:** 5 GHz networks cannot be seen or joined.
+- **Name resolution varies:** `esp32.local` depends on the firmware build and the client operating system. The built-in DNS responder is only used by clients that take the board as their DNS server, typically in Access Point mode. The IP address always works.
+- **No automated tests:** Changes are checked with `py_compile` and manual runs on a board.
 
 ## Challenges and Lessons
 
-- **RAM Fragmentation in MicroPython:**  
-  *Challenge:* Reading an entire 500 KB file into memory for HTTP transmission causes immediate `MemoryError` crashes on microcontrollers with ~100 KB free heap.  
-  *Solution:* All download and upload routines use a streaming generator pattern bounded to 1024-byte chunk buffers, followed by explicit calls to `gc.collect()` after each transaction.
-- **MicroPython Directory Sizing:**  
-  *Challenge:* Unlike desktop OS filesystems, MicroPython's `os.stat()` on a directory returns 0 bytes rather than its aggregate weight.  
-  *Solution:* Implemented recursive directory traversal in `StorageManager.get_dir_size()` using `os.ilistdir()`, allowing the frontend to present true cumulative folder storage metrics.
-- **Root Filesystem Pollution:**  
-  *Challenge:* Early iterations scattered utility scripts across the ESP32 root directory, making it difficult for users to distinguish system files from their personal project scripts.  
-  *Solution:* Refactored all application logic into the self-contained `esp32_transfer/` package with a triple-fallback import architecture, keeping the root directory clean.
-
----
+- **Challenge:** MicroPython boards have roughly 100 KB of free heap, so reading a large file into memory for an HTTP response fails.
+  **What I did:** Downloads, uploads, and the web page itself are streamed in 1 KB chunks, and `gc.collect()` runs after every request. The trade-off is more small reads and writes, and one connection at a time.
+- **Challenge:** `os.stat()` reports a size of 0 for directories on MicroPython, so folders showed no size.
+  **What I did:** `StorageManager.get_dir_size()` walks each folder with `os.ilistdir()` and adds up file sizes. The cost is that listing a directory walks every subfolder, so very deep trees list more slowly.
+- **Challenge:** Early versions scattered loose scripts across the board's root, mixing them with users' own files.
+  **What I did:** Moved everything into the `esp32_transfer/` package and gave every module a three-step import fallback (relative, package, bare) so it runs as a package, from Thonny, or as a flat script. The cost is repeated `try`/`except` blocks in each module.
+- **Challenge:** Reading each request with a single `recv(1024)` truncated headers, which produced malformed requests.
+  **What I did:** The server now reads 512-byte pieces until it finds the end of the headers, up to 4,096 bytes. Requests with larger headers are not supported.
+- **Challenge:** Re-flashing every file on each deploy wears flash and is slow over serial.
+  **What I did:** The installer compares SHA-256 hashes and writes only changed files, and it never overwrites a `config.json` that is already on the board.
 
 ## Contributing
 
-Contributions, bug reports, and feature proposals are welcome.
+Bug reports, feature ideas, and pull requests are welcome. Please open an [issue](https://github.com/sumitrawat2417/esp32-transfer/issues) first for larger changes.
 
-1. Fork the repository and create a feature branch (`git checkout -b feature/improvement`).
-2. Verify all Python syntax locally:
+1. Fork the repository and create a branch such as `feature/my-change`.
+2. Keep the on-board code dependency-free and small: nothing outside `esp32_transfer/` is needed at runtime, the web interface must work offline with no CDN, and file I/O should stay chunked with `gc.collect()` at sensible points.
+3. Check syntax before flashing:
+
    ```bash
-   python -m py_compile esp32_transfer/__init__.py
-   python -m py_compile esp32_transfer/server.py
-   python -m py_compile tools/deploy.py
+   python -m py_compile esp32_transfer/__init__.py esp32_transfer/app.py esp32_transfer/config.py esp32_transfer/dns.py esp32_transfer/server.py esp32_transfer/setup_wifi.py esp32_transfer/storage.py tools/deploy.py
    ```
-3. Commit your changes using descriptive commit messages.
-4. Push to your branch and submit a Pull Request.
 
-*(Note: Internal design notes and development documentation reside in the local `docs/` folder, which is excluded from the Git repository).*
-
----
+   `wifi.py` imports the MicroPython-only `network` module, so check it by reading it carefully.
+4. Test on a board in both modes: Access Point (upload, view, download, delete) and Station (`http://esp32.local/` loads). Also try nested folders and an upload with little free space.
+5. Write commit messages with a type prefix such as `feat:`, `fix:`, `refactor:`, `docs:`, or `test:`, then open a pull request.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is released under the [MIT License](LICENSE).
+
+## Acknowledgements
+
+- [MicroPython](https://micropython.org/): the runtime this project is built for.
+- [PySerial](https://github.com/pyserial/pyserial): serial communication in the host installer.
+- [PyInstaller](https://pyinstaller.org/): builds the standalone installer executable.
 
 ---
 

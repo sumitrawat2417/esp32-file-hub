@@ -264,20 +264,20 @@ Settings are stored on the board in `/esp32_transfer/config.json`:
 
 ## REST API Reference
 
-The embedded HTTP server exposes the following REST endpoints:
+The embedded HTTP server exposes the following REST endpoints. Wildcard CORS (`Access-Control-Allow-Origin: *`) is enabled on all responses:
 
-| Method | Endpoint | Query Parameters | Description |
-| --- | --- | --- | --- |
-| `GET` | `/` | None | Serves the single-page application (`index.html`) |
-| `GET` | `/api/storage` | None | Returns total, free, and used flash space metrics in megabytes |
-| `GET` | `/api/files` | `path` (default: `/`) | Returns directory listing with file sizes, types, and capacity percentages |
-| `POST` | `/api/upload` | `path`, `overwrite=true\|false` | Streams incoming payload to target path via atomic `.upload.tmp` staging |
-| `GET` | `/api/download` | `path` | Streams the requested file with `Content-Disposition: attachment` |
-| `DELETE` | `/api/files` | `path` | Deletes a file or recursively removes a directory tree |
-| `POST` | `/api/mkdir` | `path` | Recursively creates parent and target directories on flash |
-| `GET` | `/api/hash` | `path` | Computes and returns the SHA-256 checksum of a stored file |
-| `GET` | `/api/wifi` | None | Returns current Wi-Fi status, operating mode, and active IP |
-| `POST` | `/api/wifi` | Body: `{"ssid": "...", "password": "..."}` | Writes new credentials to `config.json` and reboots the board |
+| Method | Endpoint | Parameters / Payload | Status | Description |
+| --- | --- | --- | --- | --- |
+| `GET` | `/` | None | 200 | Serves the single-page application (`index.html`) |
+| `GET` | `/api/storage` | None | 200 | Flash storage metrics (`total_bytes`, `free_bytes`, `used_pct`, MBs) |
+| `GET` | `/api/files` | Query: `path` (default: `/`) | 200 | Returns directory metadata and entries array (`{"path": "...", "entries": [...]}`) |
+| `POST` | `/api/upload` | Query: `path` (destination file), `overwrite` | 201 | Streams payload to target path via atomic `.upload.tmp` staging |
+| `GET` | `/api/download` | Query: `path` | 200 | Streams requested file with `Content-Disposition: attachment` |
+| `DELETE` | `/api/files` | Query: `path` | 200 | Deletes a file or recursively removes a directory tree |
+| `POST` | `/api/mkdir` | Query: `path` | 201 | Recursively creates parent and target directories on flash |
+| `GET` | `/api/hash` | Query: `path` | 200 | Computes SHA-256 checksum (`{"path": "...", "sha256": "..."}`) |
+| `GET` | `/api/wifi` | None | 200 | Returns mode (`AP`/`STA`), active IP, hostname, and SSID config |
+| `POST` | `/api/wifi` | Body: `{"sta_ssid": "...", "sta_password": "..."}` | 200 | Writes credentials to `config.json` and initiates soft-reboot |
 
 ---
 

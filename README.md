@@ -12,7 +12,7 @@
 
 <br/><br/>
 
-<img src="img/web_preview_home.png" alt="ESP32 File Hub Dashboard" width="900" style="border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+<img src="img/web_preview_home.png?v=2" alt="ESP32 File Hub Dashboard" width="900" style="border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
 
 </div>
 

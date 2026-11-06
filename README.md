@@ -342,7 +342,6 @@ esp32-file-hub/
 ├── tools/
 │   ├── deploy.py              # Host-side differential installer (PySerial, raw REPL)
 │   └── build_installer.bat    # PyInstaller recipe for a standalone installer
-├── esp32_transfer.py          # Backward-compatibility import shim
 ├── install.bat                # One-click Windows launcher for deploy.py
 ├── LICENSE                    # MIT License
 └── README.md

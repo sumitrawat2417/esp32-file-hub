@@ -297,11 +297,6 @@ def deploy():
         (os.path.join("esp32_file_hub", "www", "index.html"), "esp32_file_hub/www/index.html"),
     ]
 
-    # Include backward-compatibility shim if it exists locally
-    compat_shim = os.path.join(base_dir, "esp32_transfer.py")
-    if os.path.exists(compat_shim):
-        files_to_sync.append((compat_shim, "esp32_transfer.py"))
-
     dirs_to_create = ["esp32_file_hub", "esp32_file_hub/www"]
     for d in dirs_to_create:
         uploader.make_remote_dir(d)

@@ -10,6 +10,10 @@
 
 [Report a Bug](https://github.com/sumitrawat2417/esp32-file-hub/issues) · [Request a Feature](https://github.com/sumitrawat2417/esp32-file-hub/issues)
 
+<br/><br/>
+
+<img src="img/web_preview_home.png" alt="ESP32 File Hub Dashboard" width="900" style="border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+
 </div>
 
 ---
@@ -53,6 +57,19 @@
 
 - **Differential installer:** `tools/deploy.py` finds the board's serial port, compares SHA-256 hashes, and uploads only the files that changed, which limits flash writes.
 - **One-click launcher:** `install.bat` runs the installer on Windows. `tools/build_installer.bat` builds a standalone executable with PyInstaller.
+
+## Interface Preview
+
+| Directory Navigation & Breadcrumbs | In-Browser Text & Code Viewer |
+| :---: | :---: |
+| <img src="img/web_preview_dir.png" alt="Directory Navigation" width="450"> | <img src="img/web_file_preview.png" alt="File Viewer" width="450"> |
+| *Subfolder browsing with instant client-side caching* | *Inline viewer with line numbers, copy & download* |
+
+<div align="center">
+  <br/>
+  <img src="img/web_upload_process.png" alt="Upload Conflict Resolution" width="700">
+  <p><em>Smart conflict resolution: real-time SHA-256 duplicate detection with Replace & Skip controls</em></p>
+</div>
 
 ## Tech Stack
 
@@ -154,6 +171,12 @@ Close Thonny, PuTTY, the Arduino IDE, and any other program that holds the seria
 
 Connect the board over USB and double-click `install.bat` in the repository root.
 
+<div align="center">
+  <br/>
+  <img src="img/installer.png" alt="ESP32 File Hub Automated Flasher" width="750">
+  <p><em>Automatic port detection, differential SHA-256 sync, and board reboot</em></p>
+</div>
+
 **Option 2: Command line (Windows, macOS, Linux)**
 
 ```bash
@@ -195,6 +218,11 @@ esp32_file_hub.start()
 ### Verify it works
 
 If no network is saved yet, the REPL first asks how the board should connect. Press Enter to accept the default, Access Point mode:
+
+| Wi-Fi Mode Selection Prompt | Connection Banner & Web Address |
+| :---: | :---: |
+| <img src="img/thonny_app_init.png" alt="Wi-Fi Mode Selection Prompt" width="420"> | <img src="img/thonny_app_app_addr.png" alt="Assigned IP and Banner" width="420"> |
+| *Select between Station mode or Standalone AP* | *REPL displays assigned IP, mDNS address, and mode* |
 
 ```text
 Select Wi-Fi Operation Mode:
